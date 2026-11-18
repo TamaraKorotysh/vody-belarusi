@@ -779,16 +779,22 @@ const nearCity=(x,z)=>L.cities.some(([n,cx,cz,r])=>Math.hypot(x-cx,z-cz)<(n==="�
       place[kind].push([x,y-.02,z,kind==="tower"?(.7+rnd()*(nm==="Минск"?1.2:.6)):(.8+rnd()*.35),Math.round(rnd()*4)*Math.PI/2+(rnd()-.5)*.3,0])}}
 }
 // two bison grazing in a glade of Belovezhskaya Pushcha: a cow and her reddish calf
-function bison(fur,mane){const M=c=>new THREE.MeshStandardMaterial({color:c,flatShading:true,roughness:.95}),mf=M(fur),mm=M(mane),ml=M("#2e2219"),mh=M("#e6dcc4");
+function bison(fur,mane){const M=c=>new THREE.MeshStandardMaterial({color:c,flatShading:true,roughness:.95}),mf=M(fur),mm=M(mane),ml=M("#2e2219"),mh=M("#e6dcc4"),mn=M("#2a201a");
   const g=new THREE.Group(),add=(geo,mat,x,y,z,par=g)=>{const m=new THREE.Mesh(geo,mat);m.position.set(x,y,z);m.castShadow=true;par.add(m);return m};
-  add(new THREE.BoxGeometry(.55,.34,.34),mf,-.14,.42,0);                                    // hindquarters
-  add(new THREE.SphereGeometry(.3,6,4),mm,.2,.53,0).scale.set(1.05,1.15,.85);               // shaggy hump
-  add(new THREE.CylinderGeometry(.02,.03,.26,4),mf,-.44,.4,0).rotation.z=-.5;              // tail
-  for(const [x,z] of [[.24,.11],[.24,-.11],[-.3,.11],[-.3,-.11]])add(new THREE.CylinderGeometry(.045,.035,.32,5),ml,x,.16,z);
-  const head=new THREE.Group();head.position.set(.44,.5,0);g.add(head);
-  add(new THREE.BoxGeometry(.26,.22,.2),mm,.13,-.08,0,head);                                 // head
-  add(new THREE.ConeGeometry(.07,.16,5),mm,.1,-.24,0,head).rotation.z=Math.PI;              // beard
-  for(const s of [-1,1]){const h=add(new THREE.ConeGeometry(.022,.12,4),mh,.06,.05,s*.12,head);h.rotation.x=-s*.9}
+  const blob=(r,seed)=>jitter(new THREE.IcosahedronGeometry(r,1),r*.07,seed);            // faceted, rounded lumps like the trees and clouds
+  add(blob(.26,1),mf,-.16,.42,0).scale.set(1.25,.78,.72);                                   // hindquarters
+  add(blob(.2,2),mf,.02,.44,0).scale.set(1.2,.95,.85);                                      // belly joining front and back
+  add(blob(.31,3),mm,.22,.54,0).scale.set(1,1.12,.86);                                      // shaggy hump
+  add(new THREE.ConeGeometry(.16,.3,7),mm,.3,.28,0).rotation.z=Math.PI;                     // chest mane hanging down
+  add(new THREE.CylinderGeometry(.018,.03,.26,5),mf,-.47,.38,0).rotation.z=-.45;           // tail
+  add(blob(.035,4),mm,-.53,.27,0);                                                           // tail tuft
+  for(const [x,z] of [[.26,.1],[.26,-.1],[-.3,.1],[-.3,-.1]]){add(new THREE.CylinderGeometry(.05,.034,.32,6),ml,x,.17,z);add(new THREE.CylinderGeometry(.034,.04,.04,6),mn,x,.02,z)}
+  const head=new THREE.Group();head.position.set(.44,.52,0);g.add(head);
+  add(blob(.15,5),mm,.12,-.08,0,head).scale.set(1.05,1,.85);                                 // head with curly forelock
+  add(blob(.09,6),mf,.25,-.15,0,head).scale.set(1,.85,.9);                                   // muzzle
+  add(new THREE.ConeGeometry(.06,.15,6),mm,.12,-.24,0,head).rotation.z=Math.PI;             // beard
+  for(const s of [-1,1]){const h=add(new THREE.ConeGeometry(.022,.12,5),mh,.07,.03,s*.12,head);h.rotation.x=-s*.95;
+    add(blob(.022,7+s),mn,.22,-.08,s*.08,head)}                                              // eyes
   g.userData.head=head;return g}
 const herd=[{b:bison("#5b3c27","#47301f"),s:.95,dx:0,dz:0,ph:0},{b:bison("#9a6438","#86552f"),s:.58,dx:-.7,dz:.5,ph:2.3}];
 for(const h of herd){h.b.scale.setScalar(h.s);scene.add(h.b)}
