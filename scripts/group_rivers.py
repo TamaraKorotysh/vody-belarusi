@@ -95,7 +95,9 @@ for r in sorted(keep, key=lambda r: -r["kin"]):
     if rid in used: rid = f'{r["ru"]} (приток: {r["mouth"]})' if r["mouth"] else f'{r["ru"]} ({round(r["kin"])} км)'
     while rid in used: rid += "·"
     used.add(rid); r["id"] = rid
-out = [{"id": r["id"], "ru": r["ru"], "be": r["be"], "km": round(r["km"]), "kin": round(r["kin"]), "mouth": r["mouth"], "lines": [[[round(x, 5), round(y, 5)] for x, y in l] for l in r["lines"]]} for r in keep]
+# Belarusian spellings corrected after «Блакітная кніга Беларусі»
+BE_FIX = {"Добысна": "Добасна", "Берёзовка": "Бярозаўка", "Лукомка": "Лукомка"}
+out = [{"id": r["id"], "ru": r["ru"], "be": BE_FIX.get(r["ru"], r["be"]), "km": round(r["km"]), "kin": round(r["kin"]), "mouth": r["mouth"], "lines": [[[round(x, 5), round(y, 5)] for x, y in l] for l in r["lines"]]} for r in keep]
 json.dump(out, open("rivers_auto.json", "w", encoding="utf8"), ensure_ascii=False, separators=(",", ":"))
 print(len(rivers), "groups;", len(out), "kept")
 for r in sorted(out, key=lambda r: -r["kin"])[:400]: print(f'{r["id"]:40s} {r["kin"]:4d} км  -> {r["mouth"]}')

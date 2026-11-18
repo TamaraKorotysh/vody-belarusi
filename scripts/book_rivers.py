@@ -9,7 +9,7 @@ UP = "А-ЯЁІЎ"
 def norm(s): return s.upper().replace(" ", "").replace("Ё", "Е").replace("Ў", "У").replace("Й", "И").replace("'", "").replace("’", "").replace("ʼ", "")
 # all river entries: HEADING, [other names,] рака ў ..., левы/правы прыток ...
 ent = []
-for m in re.finditer(r"(?<![" + UP + r"])([" + UP + r"][" + UP + r"\-ʼ' ]{1,30}?), ((?:[^.,]{1,40}, ){0,4})рака ((?:[^.]|\.(?! [А-ЯЁІЎ]))*?)\. (?=(.{0,900}))", t):
+for m in re.finditer(r"(?<![" + UP + r"])([" + UP + r"][" + UP + r"\-ʼ' ]{1,30}?), ((?:[^.,]{1,40}, ){0,4})рака ((?:[^.]|(?<= р)\.|(?<=Зах)\.|(?<=воз)\.|(?<=бас)\.|\.(?! [А-ЯЁІЎ]))*?)(?<! р)(?<!Зах)(?<!воз)(?<!бас)\. (?=(.{0,900}))", t):
     head, alt, where, rest = m.group(1).strip(), m.group(2), m.group(3), m.group(4)
     km = re.search(r"Даўжыня ?([\d ]+(?:,\d+)?) км", rest[:300])
     if not km: continue
@@ -37,7 +37,8 @@ for r in auto:
     best = max(cands, key=score)
     if abs(best["km"] - r["km"]) / max(best["km"], 1) > .6 and not (mb and best["into"] and norm(best["into"]).startswith(mb)):
         miss.append(r["id"] + " (?)"); continue
-    if mb and best["into"] and not norm(best["into"]).startswith(mb) and not norm(best["into"]).startswith("ЗАХ"):
+    stem_ok = lambda e: norm(e["into"]).startswith(mb) or norm(e["into"]).startswith("ЗАХ") or (mb == "САЖ" and norm(e["into"]).startswith("СОЖ"))
+    if mb and best["into"] and not stem_ok(best) and abs(best["km"] - r["kin"]) / best["km"] > .3:
         miss.append(r["id"] + " (другое устье)"); continue
     out[r["id"]] = best
 json.dump(out, open(os.path.join(root, "data", "book_auto.json"), "w", encoding="utf8"), ensure_ascii=False, indent=0)
