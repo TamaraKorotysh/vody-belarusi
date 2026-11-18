@@ -1,0 +1,7 @@
+# Book scans are over GitHub's 100 MB file limit; the extracted text is in data/book.txt
+*.pdf
+*.djvu
+.claude/
+__pycache__/
+# Full text of «Блакітная кніга Беларусі» — copyrighted, kept only locally
+data/book.txt

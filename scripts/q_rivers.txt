@@ -1,0 +1,4 @@
+[out:json][timeout:300];
+area["ISO3166-1"="BY"][admin_level=2]->.by;
+way["waterway"="river"]["name"](area.by);
+out geom qt;
