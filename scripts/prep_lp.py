@@ -4,13 +4,14 @@ from scipy.spatial import Delaunay, cKDTree
 
 D = json.load(open("d3.json", encoding="utf8"))
 G = D["grid"]; nx, nz = G["nx"], G["nz"]; H = np.array(G["h"], dtype=np.float32).reshape(nz, nx)
-YS, BASE = 0.017, 0.35
+# 1 map unit ≈ 6.95 km, so YS = 40 / 6950 exaggerates heights about 40 times
+YS, BASE = 40 / 6950, 0.35
 def meters(x, z):
     fx = (np.asarray(x) - G["x0"]) / G["step"]; fz = (np.asarray(z) - G["z0"]) / G["step"]
     i = np.clip(np.floor(fx).astype(int), 0, nx - 2); j = np.clip(np.floor(fz).astype(int), 0, nz - 2)
     a = np.clip(fx - i, 0, 1); b = np.clip(fz - j, 0, 1)
     return H[j, i] * (1 - a) * (1 - b) + H[j, i + 1] * a * (1 - b) + H[j + 1, i] * (1 - a) * b + H[j + 1, i + 1] * a * b
-def yof(m): return BASE + np.maximum(0, m - 95) * YS
+def yof(m): return BASE + np.maximum(0, m - 75) * YS
 
 border = np.array(D["border"], dtype=float)
 bx, bz = border[:, 0], border[:, 1]

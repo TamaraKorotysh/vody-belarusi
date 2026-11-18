@@ -103,7 +103,7 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 <div id="labels"></div>
 <div class="brand paper"><div class="lang" role="group" aria-label="Язык / Мова"><button data-l="ru" aria-pressed="true">Рус</button><button data-l="be" aria-pressed="false">Бел</button></div><h1 id="title">Воды <b>Беларуси</b></h1><p id="hint">Вращайте макет. Нажмите на булавку, затем на название.</p></div>
 <nav class="list paper collapsed" id="list" aria-label="Реки и озёра"><button class="ltog" id="listToggle" aria-expanded="false" aria-controls="listBody"><i class="ic"></i><span id="listLabel">Реки и озёра</span><i class="chev"></i></button><div id="listBody"></div></nav>
-<div class="credit">Данные: <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap</a>, рельеф: Mapzen / AWS Terrain Tiles</div>
+<div class="credit" id="credit">Высоты увеличены в 40 раз · Данные: <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap</a>, рельеф: Mapzen / AWS Terrain Tiles</div>
 <div class="tools"><button class="paper" id="refill">Наполнить</button><button class="paper" id="home">Весь макет</button></div>
 <article class="card paper hide" id="card" aria-live="polite"></article>
 
@@ -123,7 +123,7 @@ for(const a of AUTO)if(!CARDS[a.id]){const b=a.book||null;
     km:b?b.km:a.km,kin:a.kin,basin:b&&b.basin,q:b&&b.q,side:b&&b.side,stats:[],from:["",""],to:["",""],name:"",facts:[]}}
 let LANG="ru";try{if(localStorage.getItem("lang")==="be")LANG="be"}catch(e){}
 const TX={
- ru:{doc:"Воды Беларуси",title:"Воды <b>Беларуси</b>",hint:"Вращайте макет. Нажмите на булавку, затем на название.",refill:"Наполнить",home:"Весь макет",
+ ru:{credit:"Высоты увеличены в 40 раз · Данные: <a href=\"https://www.openstreetmap.org/copyright\" target=\"_blank\" rel=\"noopener\">© OpenStreetMap</a>, рельеф: Mapzen / AWS Terrain Tiles",doc:"Воды Беларуси",title:"Воды <b>Беларуси</b>",hint:"Вращайте макет. Нажмите на булавку, затем на название.",refill:"Наполнить",home:"Весь макет",
   search:"Найти реку или озеро",searchAria:"Поиск по названию",list:"Реки и озёра",canvas:"Гранёный макет Беларуси с реками и озёрами",
   river:"Река",lake:"Озеро",riverL:"река",lakeL:"озеро",more:"подробнее ›",route:"Откуда и куда",link:"Связь с реками",hist:"История названия",facts:"Интересные факты",
   close:"Закрыть",other:"по-белорусски: ",g_main:"Главные реки",g_minor:"Притоки",g_lake:"Озёра",g_auto:"Малые реки",
@@ -131,7 +131,7 @@ const TX={
   noteCur:"Цифры сверены с «Блакітнай кнігай Беларусі» (1994). Версии происхождения названий взяты из других источников: в этой книге их нет.",
   noteBook:"Длина, бассейн и расход — по «Блакітнай кнізе Беларусі» (1994). Устье определено по OpenStreetMap.",
   noteOsm:"Длина и устье посчитаны автоматически по данным OpenStreetMap; в «Блакітнай кнізе Беларусі» эту реку найти не удалось."},
- be:{doc:"Воды Беларусі",title:"Воды <b>Беларусі</b>",hint:"Круціце макет. Націсніце на шпільку, потым на назву.",refill:"Напоўніць",home:"Увесь макет",
+ be:{credit:"Вышыні павялічаны ў 40 разоў · Даныя: <a href=\"https://www.openstreetmap.org/copyright\" target=\"_blank\" rel=\"noopener\">© OpenStreetMap</a>, рэльеф: Mapzen / AWS Terrain Tiles",doc:"Воды Беларусі",title:"Воды <b>Беларусі</b>",hint:"Круціце макет. Націсніце на шпільку, потым на назву.",refill:"Напоўніць",home:"Увесь макет",
   search:"Знайсці раку або возера",searchAria:"Пошук па назве",list:"Рэкі і азёры",canvas:"Гранёны макет Беларусі з рэкамі і азёрамі",
   river:"Рака",lake:"Возера",riverL:"рака",lakeL:"возера",more:"падрабязней ›",route:"Адкуль і куды",link:"Сувязь з рэкамі",hist:"Гісторыя назвы",facts:"Цікавыя факты",
   close:"Закрыць",other:"па-руску: ",g_main:"Галоўныя рэкі",g_minor:"Прытокі",g_lake:"Азёры",g_auto:"Малыя рэкі",
@@ -364,23 +364,42 @@ function towerGeo(seed){const b=new THREE.BoxGeometry(.42,1,.42);b.translate(0,.
 const kinds={pine:pineGeo(1),pine2:pineGeo(2,.8),tree:treeGeo(3,PAL.leaf),ochre:treeGeo(4,PAL.ochre),rock:rockGeo(5),house:houseGeo(1,PAL.roof),house2:houseGeo(2,PAL.roof2),house3:houseGeo(3,PAL.roof3),tower:towerGeo(4)};
 const place={pine:[],pine2:[],tree:[],ochre:[],rock:[],house:[],house2:[],house3:[],tower:[]};
 const lakePolys=Object.values(L.lakes).map(lk=>lk.level);
+const PUSHCHA=[-38.2,16.6];   // Belovezhskaya Pushcha (23.88 E, 52.65 N)
 const nearCity=(x,z)=>L.cities.some(([n,cx,cz,r])=>Math.hypot(x-cx,z-cz)<(n==="Минск"?2.6:r===1?1.9:1.3));
 {
   const B=L.border;let x0=1e9,x1=-1e9,z0=1e9,z1=-1e9;for(const [x,z] of B){x0=Math.min(x0,x);x1=Math.max(x1,x);z0=Math.min(z0,z);z1=Math.max(z1,z)}
-  const MAXT=mobile?4200:8000;let n=0;
+  const MAXT=mobile?5200:10000;let n=0;
   for(let t=0;t<90000&&n<MAXT;t++){
     const x=x0+rnd()*(x1-x0),z=z0+rnd()*(z1-z0),fz=forestN(x,z);
-    const inForest=fz>.53;if(!inForest&&rnd()>.03)continue;
+    const dP=Math.hypot(x-PUSHCHA[0],z-PUSHCHA[1]);if(dP<1.6)continue;const inForest=fz>.53||dP<4.5;if(!inForest&&rnd()>.03)continue;
     if(!inPoly(x,z,B))continue;const rv=riverNear(x,z);if(rv.d<rv.hw+.9)continue;if(nearCity(x,z))continue;
     const y=heightAt(x,z);if(y==null)continue;
     const polesie=z>13;const kind=inForest?(polesie?(rnd()<.5?"tree":"pine2"):(rnd()<.62?(rnd()<.5?"pine":"pine2"):(rnd()<.2?"ochre":"tree"))):(rnd()<.3?"ochre":"tree");
-    place[kind].push([x,y-.03,z,.75+rnd()*.5,rnd()*6.28,(rnd()-.5)*.1]);n++}
+    place[kind].push([x,y-.03,z,.45+rnd()*.3,rnd()*6.28,(rnd()-.5)*.1]);n++}
   for(let t=0;t<3000;t++){const x=x0+rnd()*(x1-x0),z=z0+rnd()*(z1-z0);if(!inPoly(x,z,B))continue;const rv=riverNear(x,z);if(!(rv.d>rv.hw+.4&&rv.d<rv.hw+1.4)||rnd()>.25)continue;const y=heightAt(x,z);if(y==null)continue;place.rock.push([x,y-.02,z,.25+rnd()*.35,rnd()*6.28,0])}
   for(const [nm,cx,cz,r] of L.cities){const count=nm==="Минск"?60:r===1?28:r===2?13:6,spread=nm==="Минск"?2.4:r===1?1.7:r===2?1.15:.75;
     for(let k=0,tries=0;k<count&&tries<count*8;tries++){const a=rnd()*6.283,rr=Math.sqrt(rnd())*spread,x=cx+Math.cos(a)*rr,z=cz+Math.sin(a)*rr;const rv=riverNear(x,z);if(rv.d<rv.hw+.45)continue;const y=heightAt(x,z);if(y==null)continue;k++;
       const kind=(r===1&&rr<spread*.3&&rnd()<.45)?"tower":["house","house2","house3"][Math.floor(rnd()*3)];
       place[kind].push([x,y-.02,z,kind==="tower"?(.7+rnd()*(nm==="Минск"?1.2:.6)):(.8+rnd()*.35),Math.round(rnd()*4)*Math.PI/2+(rnd()-.5)*.3,0])}}
 }
+// two bison grazing in a glade of Belovezhskaya Pushcha: a cow and her reddish calf
+function bison(fur,mane){const M=c=>new THREE.MeshStandardMaterial({color:c,flatShading:true,roughness:.95}),mf=M(fur),mm=M(mane),ml=M("#2e2219"),mh=M("#e6dcc4");
+  const g=new THREE.Group(),add=(geo,mat,x,y,z,par=g)=>{const m=new THREE.Mesh(geo,mat);m.position.set(x,y,z);m.castShadow=true;par.add(m);return m};
+  add(new THREE.BoxGeometry(.55,.34,.34),mf,-.14,.42,0);                                    // hindquarters
+  add(new THREE.SphereGeometry(.3,6,4),mm,.2,.53,0).scale.set(1.05,1.15,.85);               // shaggy hump
+  add(new THREE.CylinderGeometry(.02,.03,.26,4),mf,-.44,.4,0).rotation.z=-.5;              // tail
+  for(const [x,z] of [[.24,.11],[.24,-.11],[-.3,.11],[-.3,-.11]])add(new THREE.CylinderGeometry(.045,.035,.32,5),ml,x,.16,z);
+  const head=new THREE.Group();head.position.set(.44,.5,0);g.add(head);
+  add(new THREE.BoxGeometry(.26,.22,.2),mm,.13,-.08,0,head);                                 // head
+  add(new THREE.ConeGeometry(.07,.16,5),mm,.1,-.24,0,head).rotation.z=Math.PI;              // beard
+  for(const s of [-1,1]){const h=add(new THREE.ConeGeometry(.022,.12,4),mh,.06,.05,s*.12,head);h.rotation.x=-s*.9}
+  g.userData.head=head;return g}
+const herd=[{b:bison("#5b3c27","#47301f"),s:.95,dx:0,dz:0,ph:0},{b:bison("#9a6438","#86552f"),s:.58,dx:-.7,dz:.5,ph:2.3}];
+for(const h of herd){h.b.scale.setScalar(h.s);scene.add(h.b)}
+function updateHerd(T){const t=reduce?0:T,a=t*.035;
+  for(const h of herd){const ang=a-(h.dx?.5:0),x=PUSHCHA[0]+.35*Math.cos(ang)+h.dx,z=PUSHCHA[1]+.35*Math.sin(ang)+h.dz;
+    h.b.position.set(x,(heightAt(x,z)??1)-.01,z);h.b.rotation.y=-ang-Math.PI/2+.4*Math.sin(t*.07+h.ph);
+    const c=(t*.25+h.ph)%6;h.b.userData.head.rotation.z=c<4.6?-.75+.08*Math.sin(t*3+h.ph):-.75+.7*Math.sin((c-4.6)/1.4*Math.PI)}}   // mostly head down, now and then a look around
 const propMat=faceted(),born={};
 for(const k of Object.keys(kinds)){const list=place[k];if(!list.length)continue;const m=new THREE.InstancedMesh(kinds[k],propMat,list.length);m.castShadow=true;m.receiveShadow=true;
   const o=new THREE.Object3D(),c=new THREE.Color();
@@ -500,7 +519,7 @@ function renderCard(n){const c=CARDS[n],lake=c.type==="lake",be=LANG==="be",cb=b
   <div class="note">${note}</div>`;
   document.getElementById("close").onclick=()=>select(null)}
 function applyLang(l){LANG=l;try{localStorage.setItem("lang",l)}catch(e){}
-  document.documentElement.lang=l;document.title=tx("doc");document.getElementById("title").innerHTML=tx("title");document.getElementById("hint").textContent=tx("hint");
+  document.documentElement.lang=l;document.title=tx("doc");document.getElementById("title").innerHTML=tx("title");document.getElementById("hint").textContent=tx("hint");document.getElementById("credit").innerHTML=tx("credit");
   document.getElementById("refill").textContent=tx("refill");document.getElementById("home").textContent=tx("home");document.getElementById("listLabel").textContent=tx("list");
   list.setAttribute("aria-label",tx("list"));document.getElementById("c").setAttribute("aria-label",tx("canvas"));
   for(const b of document.querySelectorAll(".lang button"))b.setAttribute("aria-pressed",String(b.dataset.l===l));
@@ -537,7 +556,7 @@ const start=performance.now();
 function loop(now){
   T=(now-start)/1000;clock.value=reduce?50:T;
   for(const [m,x,y,z,seed] of clouds)m.position.set(x+((T*.6+seed*13)%40)-20,y+.4*Math.sin(T*.5+seed),z);
-  updateStorks(T);
+  updateStorks(T);updateHerd(T);
   camD=camera.position.distanceTo(controls.target);const fs=Math.min(portrait?5:3.6,Math.max(.6,camD/38));
   for(const p of pins){const t=reduce?9:T-p.t0,a=spring(t,2.6,.38);const near=(p.auto?camD<38:(!p.minor||camD<70))||p.name===selected||p.name===bubbleFor;
     p.m.visible=(reduce||t>0)&&near;const s=fs*(p.auto?.65:p.minor?.8:1)*(p.name===bubbleFor?1.25:1);p.m.scale.set(s,s*Math.max(.001,a),s)}
