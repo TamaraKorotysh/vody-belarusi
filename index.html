@@ -775,9 +775,9 @@ const nearCity=(x,z)=>L.cities.some(([n,cx,cz,r])=>Math.hypot(x-cx,z-cz)<(n==="�
     place[kind].push([x,y-.03,z,.45+rnd()*.3,rnd()*6.28,(rnd()-.5)*.1]);n++}
   for(let t=0;t<3000;t++){const x=x0+rnd()*(x1-x0),z=z0+rnd()*(z1-z0);if(!inPoly(x,z,B))continue;const rv=riverNear(x,z);if(!(rv.d>rv.hw+.4&&rv.d<rv.hw+1.4)||rnd()>.25)continue;const y=heightAt(x,z);if(y==null)continue;place.rock.push([x,y-.02,z,.25+rnd()*.35,rnd()*6.28,0])}
   for(const [nm,cx,cz,r] of L.cities){const count=nm==="Минск"?60:r===1?28:r===2?13:r===3?6:4,spread=nm==="Минск"?2.4:r===1?1.7:r===2?1.15:r===3?.75:.5;
-    for(let k=0,tries=0;k<count&&tries<count*8;tries++){const a=rnd()*6.283,rr=Math.sqrt(rnd())*spread,x=cx+Math.cos(a)*rr,z=cz+Math.sin(a)*rr;const rv=riverNear(x,z);if(rv.d<rv.hw+.45)continue;const y=heightAt(x,z);if(y==null)continue;k++;
+    for(let k=0,tries=0;k<count&&tries<count*40;tries++){   /* towns on rivers: look a little further out until the houses fit */const grow=1+tries/(count*8),a=rnd()*6.283,rr=Math.sqrt(rnd())*spread*Math.min(grow,2.2),x=cx+Math.cos(a)*rr,z=cz+Math.sin(a)*rr;const rv=riverNear(x,z);if(rv.d<rv.hw+(r>2?.3:.45))continue;const y=heightAt(x,z);if(y==null)continue;k++;
       const kind=(r===1&&rr<spread*.3&&rnd()<.45)?"tower":["house","house2","house3"][Math.floor(rnd()*3)];
-      place[kind].push([x,y-.02,z,kind==="tower"?(.7+rnd()*(nm==="Минск"?1.2:.6)):(.8+rnd()*.35),Math.round(rnd()*4)*Math.PI/2+(rnd()-.5)*.3,0])}}
+      place[kind].push([x,y-.02,z,kind==="tower"?(.7+rnd()*(nm==="Минск"?1.2:.6)):(r===4?.42+rnd()*.12:r===3?.6+rnd()*.2:.8+rnd()*.35),Math.round(rnd()*4)*Math.PI/2+(rnd()-.5)*.3,0])}}
 }
 // two bison grazing in a glade of Belovezhskaya Pushcha: a cow and her reddish calf
 function bison(fur,mane){const M=c=>new THREE.MeshStandardMaterial({color:c,flatShading:true,roughness:.95}),mf=M(fur),mm=M(mane),ml=M("#2e2219"),mh=M("#e6dcc4"),mn=M("#2a201a");
