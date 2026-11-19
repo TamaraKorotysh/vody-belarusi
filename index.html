@@ -27,6 +27,10 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 #listBody{display:flex;flex-direction:column;gap:1px;max-height:calc(100vh - 230px);overflow:auto;overscroll-behavior:contain}
 .ltog{border:0;background:none;display:flex;align-items:center;gap:9px;padding:7px 10px;border-radius:9px;font-family:var(--f-display);font-weight:500;font-size:14px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink);white-space:nowrap}
 .ltog:hover{background:var(--line)}
+.lclose{display:none;position:absolute;top:6px;right:8px;width:32px;height:32px;border:0;border-radius:50%;background:var(--line);font-size:18px;line-height:1;color:var(--ink);z-index:1}
+.list:not(.collapsed) .lclose{display:block}
+.list:not(.collapsed) #search{margin-right:44px}
+.ltog,.lclose{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
 .ltog .ic{width:16px;height:12px;background:linear-gradient(var(--river) 0 2px,transparent 2px 5px,var(--river) 5px 7px,transparent 7px 10px,var(--river) 10px 12px)}
 .ltog .chev{margin-left:auto;width:8px;height:8px;border-right:2px solid var(--ink2);border-bottom:2px solid var(--ink2);transform:rotate(-135deg) translate(-2px,-2px);transition:transform .2s}
 .list.collapsed .ltog .chev{transform:rotate(45deg) translate(-2px,-2px)}
@@ -114,7 +118,8 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 <article class="card paper hide" id="card" aria-live="polite"></article>
 
 <script>
-addEventListener("error",e=>{const m=document.createElement("div");m.className="loading";m.style.zIndex=9;m.textContent="Не удалось запустить 3D: "+(e.message||"ошибка");document.body.appendChild(m);const l=document.getElementById("loading");if(l)l.remove()});
+addEventListener("error",e=>{if(!document.getElementById("loading")){console.warn(e.message);return}   // after start-up a stray error must not cover the map
+  const m=document.createElement("div");m.style.pointerEvents="none";m.className="loading";m.style.zIndex=9;m.textContent="Не удалось запустить 3D: "+(e.message||"ошибка");document.body.appendChild(m);const l=document.getElementById("loading");if(l)l.remove()});
 </script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/controls/OrbitControls.js"></script>
@@ -1082,8 +1087,10 @@ function filter(){const q=search.value.trim().toLowerCase();
     g.h.hidden=!any;g.h.setAttribute("aria-expanded",String(!!q||openGroups[g.key]))}}
 search.addEventListener("input",filter);
 function setListOpen(o){list.classList.toggle("collapsed",!o);listToggle.setAttribute("aria-expanded",String(o))}
-listToggle.onclick=()=>setListOpen(list.classList.contains("collapsed"));
-function fitKeyboard(){const vv=window.visualViewport;if(!vv||!narrow)return;const kb=Math.max(0,innerHeight-vv.height-vv.offsetTop);
+listToggle.onclick=e=>{e.preventDefault();setListOpen(list.classList.contains("collapsed"))};
+const listClose=document.createElement("button");listClose.className="lclose";listClose.type="button";listClose.textContent="×";listClose.setAttribute("aria-label","×");
+listClose.onclick=e=>{e.preventDefault();search.blur();setListOpen(false)};list.insertBefore(listClose,list.firstChild);
+function fitKeyboard(){const vv=window.visualViewport;if(!vv||!narrow)return;const kb=document.activeElement===search?Math.max(0,innerHeight-vv.height-vv.offsetTop):0;
   list.style.transform=kb>40?`translateY(${-kb}px)`:"";listBody.style.maxHeight=kb>40?Math.max(140,vv.height-110)+"px":""}
 if(window.visualViewport){visualViewport.addEventListener("resize",fitKeyboard);visualViewport.addEventListener("scroll",fitKeyboard)}
 search.addEventListener("focus",()=>{setTimeout(fitKeyboard,250);setTimeout(()=>{fitKeyboard();search.scrollIntoView({block:"nearest"})},600)});
@@ -1111,7 +1118,7 @@ function renderCard(n){const c=CARDS[n],lake=c.type==="lake"||c.type==="reservoi
   document.getElementById("close").onclick=()=>select(null)}
 function applyLang(l){LANG=l;try{localStorage.setItem("lang",l)}catch(e){}
   document.documentElement.lang=l;document.title=tx("doc");document.getElementById("title").innerHTML=tx("title");document.getElementById("hint").textContent=tx("hint");document.getElementById("credit").innerHTML=tx("credit");
-  document.getElementById("refill").textContent=tx("refill");document.getElementById("home").textContent=tx("home");document.getElementById("listLabel").textContent=tx("list");
+  document.getElementById("refill").textContent=tx("refill");document.getElementById("home").textContent=tx("home");document.getElementById("listLabel").textContent=tx("list");listClose.setAttribute("aria-label",tx("close"));
   list.setAttribute("aria-label",tx("list"));document.getElementById("c").setAttribute("aria-label",tx("canvas"));
   for(const b of document.querySelectorAll(".lang button"))b.setAttribute("aria-pressed",String(b.dataset.l===l));
   for(const lb of labels)lb.el.textContent=l==="be"?(lb.be||CITY_BE[lb.n]||lb.n):lb.n;
@@ -1133,7 +1140,7 @@ applyLang(LANG);
 document.getElementById("home").onclick=()=>{select(null);flyTo(HOME.target.clone(),HOME.pos.clone())};
 document.getElementById("refill").onclick=()=>{if(reduce)return;let k=0;for(const it of Object.values(items)){it.uni.uT0.value=T+.2+k*.08;it.pin.t0=it.uni.uT0.value+(it.type==="river"?it.len*.45/it.uni.uSpeed.value:.6)+.15;k++}};
 const ray=new THREE.Raycaster(),ndc=new THREE.Vector2();let down=null;
-canvas.addEventListener("pointerdown",e=>{down=[e.clientX,e.clientY];fly=null});
+canvas.addEventListener("pointerdown",e=>{down=[e.clientX,e.clientY];fly=null;if(narrow&&!list.classList.contains("collapsed")){search.blur();setListOpen(false)}});
 canvas.addEventListener("pointerup",e=>{if(!down||Math.hypot(e.clientX-down[0],e.clientY-down[1])>6)return;ndc.set(e.clientX/innerWidth*2-1,-(e.clientY/innerHeight)*2+1);ray.setFromCamera(ndc,camera);
   const hit=ray.intersectObjects(clickables.filter(o=>o.visible),false)[0];
   if(!hit){closeBubble();return}
