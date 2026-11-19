@@ -97,13 +97,16 @@ t = np.clip((d - hw * 0.6) / (hw + .65 - hw * 0.6), 0, 1); t = t * t * (3 - 2 * 
 carved = np.where(d < hw * 0.6, wl - 0.22, (wl - 0.22) * (1 - t) + np.maximum(y, bank) * t)
 near = d < hw + .7
 y = np.where(near, np.minimum(np.maximum(carved, np.where(d > hw + .2, bank, -9)), np.maximum(y, bank)), y)
-y = np.where((d > hw * 0.6) & (d < hw + .3), np.maximum(y, wl + 0.06), y)
+y = np.where((d > hw + .08) & (d < hw + .3), np.maximum(y, wl + 0.06), y)   # banks start beyond the drawn ribbon (its half-width is hw + .06)
 y = np.where(d < hw * 0.6, wl - 0.22, y)
 for ring, lvl, holes in lake_polys:
     ins = inside(P[:, 0], P[:, 1], ring[:, 0], ring[:, 1])
     for h in holes: ins &= ~inside(P[:, 0], P[:, 1], h[:, 0], h[:, 1])
     y[ins] = lvl - 0.3
     sd = cKDTree(ring).query(P)[0]; shore = (~ins) & (sd < 0.05); y[shore] = np.maximum(lvl + 0.06, np.minimum(y[shore], lvl + 0.25))
+# last word: under a river's ribbon the ground is always below its water, even where a lake bowl or shore lifted it
+y = np.where(d < hw * 0.6, np.minimum(y, wl - 0.22), y)
+y = np.where(d < hw + .08, np.minimum(y, wl - 0.03), y)
 
 tri = Delaunay(P).simplices
 c = P[tri].mean(axis=1)
