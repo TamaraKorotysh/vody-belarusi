@@ -11,7 +11,7 @@ def bk(e):
 auto = [{"id": r["id"], "ru": r["ru"], "be": r["be"], "km": r["km"], "kin": r["kin"], "mouth": r["mouth"], "mouth_be": r.get("mouth_be"), "book": bk(book.get(r["id"]))}
         for r in json.load(open(os.path.join(D, "rivers_auto.json"), encoding="utf8"))]
 # Belarusian cards first (they define CARDS_BE), then reservoirs, canals and the auto-made lake cards, which add to both languages
-extra = [f for f in ("cards_be.js", "cards_res.js", "cards_canals.js", "cards_lakes.js") if os.path.exists(os.path.join(root, f))]
+extra = [f for f in ("cards_be.js", "cards_res.js", "cards_canals.js", "cards_lakes.js", "cards_facts.js") if os.path.exists(os.path.join(root, f))]
 t = (t.replace("/*LP*/", rd(os.path.join(D, "lp.json"))).replace("/*CARDS*/", rd(os.path.join(root, "cards.js")))
       .replace("/*CARDS2*/", rd(os.path.join(root, "cards2.js")))
       .replace("/*CARDSBE*/", "\n".join(rd(os.path.join(root, f)) for f in extra))

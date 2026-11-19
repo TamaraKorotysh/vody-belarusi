@@ -20,6 +20,7 @@ for key, v in N.items():
     st_ru = [["Площадь", num(b["area"]) + " км²"]]; st_be = [["Плошча", num(b["area"]) + " км²"]]
     if b["depth"]: st_ru.append(["Наибольшая глубина", num(b["depth"]) + " м"]); st_be.append(["Найбольшая глыбіня", num(b["depth"]) + " м"])
     if b["vol"]: st_ru.append(["Объём воды", num(b["vol"]) + " млн м³"]); st_be.append(["Аб'ём вады", num(b["vol"]) + " млн м³"])
+    if key == "Бабровіцкае": b = dict(b, basin=None)   # OCR glued two columns: its «бас. р. Ула» belongs to the next entry
     bas = {"Зах": "Заходняя Дзвіна", "Аучоса": "Лучоса", "Ловаць": "Ловаць"}.get(b.get("basin"), b.get("basin"))   # «бас. р. Зах. Дзвіны» was cut at the dot; OCR Л→А
     if bas: st_ru.append(["Бассейн реки", RU.get(bas, bas)]); st_be.append(["Басейн ракі", bas])
     cards[ident] = {"type": "lake", "minor": True, "small": True, "be": be, "stats": st_ru, "from": ["", ""], "to": ["", ""], "name": "", "facts": []}

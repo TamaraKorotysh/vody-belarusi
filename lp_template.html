@@ -138,7 +138,7 @@ let LANG="be";try{if(localStorage.getItem("lang")==="ru")LANG="ru"}catch(e){}   
 const TX={
  ru:{credit:"Высоты увеличены в 40 раз · Данные: <a href=\"https://www.openstreetmap.org/copyright\" target=\"_blank\" rel=\"noopener\">© OpenStreetMap</a>, рельеф: Mapzen / AWS Terrain Tiles",doc:"Воды Беларуси",title:"Воды <b>Беларуси</b>",hint:"Вращайте макет. Нажмите на булавку, затем на название.",refill:"Наполнить",home:"Весь макет",
   search:"Найти реку или озеро",searchAria:"Поиск по названию",list:"Реки и озёра",canvas:"Гранёный макет Беларуси с реками и озёрами",
-  river:"Река",lake:"Озеро",res:"Водохранилище",canal:"Канал",riverL:"река",lakeL:"озеро",resL:"водохранилище",canalL:"канал",g_res:"Водохранилища",g_canal:"Каналы",more:"подробнее ›",route:"Откуда и куда",link:"Связь с реками",hist:"История названия",facts:"Интересные факты",
+  src:"Название и факты",wiki:"Википедия",river:"Река",lake:"Озеро",res:"Водохранилище",canal:"Канал",riverL:"река",lakeL:"озеро",resL:"водохранилище",canalL:"канал",g_res:"Водохранилища",g_canal:"Каналы",more:"подробнее ›",route:"Откуда и куда",link:"Связь с реками",hist:"История названия",facts:"Интересные факты",
   close:"Закрыть",other:"по-белорусски: ",g_main:"Главные реки",g_minor:"Притоки",g_lake:"Озёра",g_auto:"Малые реки",
   len:"Длина",inBY:"По Беларуси",basin:"Бассейн",q:"Расход в устье",into:"Впадает в",left:"левый приток",right:"правый приток",
   noteCur:"Цифры сверены с «Блакітнай кнігай Беларусі» (1994). Версии происхождения названий взяты из других источников: в этой книге их нет.",
@@ -146,7 +146,7 @@ const TX={
   noteOsm:"Длина и устье посчитаны автоматически по данным OpenStreetMap; в «Блакітнай кнізе Беларусі» эту реку найти не удалось."},
  be:{credit:"Вышыні павялічаны ў 40 разоў · Даныя: <a href=\"https://www.openstreetmap.org/copyright\" target=\"_blank\" rel=\"noopener\">© OpenStreetMap</a>, рэльеф: Mapzen / AWS Terrain Tiles",doc:"Воды Беларусі",title:"Воды <b>Беларусі</b>",hint:"Круціце макет. Націсніце на пазнаку, потым на назву.",refill:"Напоўніць",home:"Увесь макет",
   search:"Знайсці раку або возера",searchAria:"Пошук па назве",list:"Рэкі і азёры",canvas:"Гранёны макет Беларусі з рэкамі і азёрамі",
-  river:"Рака",lake:"Возера",res:"Вадасховішча",canal:"Канал",riverL:"рака",lakeL:"возера",resL:"вадасховішча",canalL:"канал",g_res:"Вадасховішчы",g_canal:"Каналы",more:"падрабязней ›",route:"Адкуль і куды",link:"Сувязь з рэкамі",hist:"Гісторыя назвы",facts:"Цікавыя факты",
+  src:"Назва і факты",wiki:"Вікіпедыя",river:"Рака",lake:"Возера",res:"Вадасховішча",canal:"Канал",riverL:"рака",lakeL:"возера",resL:"вадасховішча",canalL:"канал",g_res:"Вадасховішчы",g_canal:"Каналы",more:"падрабязней ›",route:"Адкуль і куды",link:"Сувязь з рэкамі",hist:"Гісторыя назвы",facts:"Цікавыя факты",
   close:"Закрыць",other:"па-руску: ",g_main:"Галоўныя рэкі",g_minor:"Прытокі",g_lake:"Азёры",g_auto:"Малыя рэкі",
   len:"Даўжыня",inBY:"Па Беларусі",basin:"Басейн",q:"Расход у вусці",into:"Упадае ў",left:"левы прыток",right:"правы прыток",
   noteCur:"Лічбы звераны з «Блакітнай кнігай Беларусі» (1994). Версіі паходжання назваў узяты з іншых крыніц: у гэтай кнізе іх няма.",
@@ -573,6 +573,9 @@ function renderCard(n){const c=CARDS[n],lake=c.type==="lake"||c.type==="reservoi
     if(!c.book)stats.push([tx("inBY"),"≈ "+c.kin+" км"]);if(c.basin)stats.push([tx("basin"),c.basin+" км²"]);if(c.q)stats.push([tx("q"),c.q+" м³/с"]);
     const mo=be?c.mouthBe:c.mouth;if(mo)stats.push([tx("into"),mo+(c.side?` <small>(${tx(c.side==="левы"?"left":"right")})</small>`:"")]);
     from=["",""];to=["",""];hist="";facts=[];note=c.book?tx("noteBook"):tx("noteOsm")}
+  const F=typeof FACTS!=="undefined"&&FACTS[n];   // name history and facts found online for cards the book left empty
+  if(F){const X=be?F.be:F.ru;if(!hist&&X.name)hist=X.name;if(!(facts&&facts.length))facts=X.facts||[];
+    note+=" "+tx("src")+": "+F.src.map(u=>`<a href="${u}" target="_blank" rel="noopener">${tx("wiki")}</a>`).join(", ")+"."}
   const other=be?plain(n):(c.be&&c.be!=="—"?c.be:"");
   card.innerHTML=`<button class="close" id="close" aria-label="${tx("close")}">×</button><div class="kind">${res?tx("res"):canal?tx("canal"):lake?tx("lake"):tx("river")}</div><h2>${dname(n)}</h2>${other?`<div class="be">${tx("other")}${other}</div>`:""}
   <dl class="stats">${stats.map(([k,v])=>`<div><dt>${k}</dt><dd>${v}</dd></div>`).join("")}</dl>
