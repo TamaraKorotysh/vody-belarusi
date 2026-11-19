@@ -91,6 +91,15 @@ for f in G["water"]["features"]:
                     else: continue
                     del segs[j]; changed=True; break
                 if changed: break
+        # even spacing (~1 km) and a light smoothing: OSM vertices a few metres apart, rounded to 0.01, made micro zigzags
+        # that twisted the water ribbon (flipped triangles showed the ground through the river)
+        def even(q, step=.15):
+            L=np.r_[0,np.cumsum(np.hypot(*np.diff(q,axis=0).T))]
+            if L[-1]<step*2: return q
+            t=np.linspace(0,L[-1],max(3,int(L[-1]/step)+1)); e=np.c_[np.interp(t,L,q[:,0]),np.interp(t,L,q[:,1])]
+            for _ in range(2): e[1:-1]=(e[:-2]+2*e[1:-1]+e[2:])/4
+            return e
+        segs=[even(q) for q in segs]
         lens=[np.r_[0,np.cumsum(np.hypot(*np.diff(s,axis=0).T))] for s in segs]
         longs=[s for s,l in zip(segs,lens) if l[-1]>1.5]
         near_long=lambda s:any(min(d2(s[0],q),d2(s[-1],q))<TOL for t in longs for q in t[::3])

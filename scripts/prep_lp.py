@@ -59,7 +59,7 @@ for n, polys in D["lakes"].items():
 
 # ---- points
 pts = []
-SP = 0.21   # base point spacing (0.72 before): about twice as many terrain triangles overall
+SP = 0.165   # base point spacing (0.72 before): about twice as many terrain triangles overall
 gx, gz = np.meshgrid(np.arange(bx.min() - 1, bx.max() + 1, SP), np.arange(bz.min() - 1, bz.max() + 1, SP * 0.866))
 gx = gx + (np.arange(gx.shape[0])[:, None] % 2) * SP / 2
 P = np.c_[gx.ravel(), gz.ravel()] + rng.uniform(-0.3, 0.3, (gx.size, 2)) * SP
