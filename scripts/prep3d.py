@@ -1,3 +1,4 @@
+import os
 import json, math, numpy as np
 K=16; CX,CY=28.0,53.7; KX=math.cos(math.radians(53.7))
 def P(lon,lat): return ((lon-CX)*KX*K,(CY-lat)*K)
@@ -80,7 +81,14 @@ for f in G["water"]["features"]:
             polys.append([[[round(a,2) for a in P(*p)] for p in ring] for ring in poly])
         lakes[n]=polys
 cities=[["Минск",27.5618,53.9025,1],["Гомель",31.0132,52.4239,1],["Витебск",30.207,55.193,1],["Гродно",23.8343,53.6835,1],["Могилёв",30.343,53.909,1],["Брест",23.6852,52.0938,1],["Бобруйск",29.2281,53.145,2],["Барановичи",26.0184,53.1323,2],["Борисов",28.5118,54.2241,2],["Пинск",26.1025,52.1114,2],["Солигорск",27.542,52.7841,2],["Орша",30.4294,54.5108,2],["Мозырь",29.2676,52.0495,2],["Лида",25.3023,53.8916,2],["Новополоцк",28.6452,55.5349,2],["Молодечно",26.8389,54.3073,2],["Полоцк",28.7682,55.4855,2],["Жлобин",30.0368,52.8909,2],["Жодино",28.3224,54.0963,2],["Речица",30.386,52.3718,2],["Слуцк",27.552,53.0277,2],["Светлогорск",29.7484,52.633,2],["Кобрин",24.3543,52.2086,3],["Слоним",25.3193,53.0927,3],["Волковыск",24.4582,53.1647,3],["Сморгонь",26.4013,54.4818,3],["Калинковичи",29.3314,52.1286,3],["Горки",30.9811,54.2895,3],["Рогачёв",30.0532,53.082,3],["Новогрудок",25.8216,53.5942,3],["Осиповичи",28.6382,53.3085,3],["Берёза",24.9845,52.5346,3],["Дзержинск",27.1315,53.6852,3],["Вилейка",26.9145,54.4881,3],["Кричев",31.7066,53.6952,3],["Лунинец",26.7978,52.2452,3],["Ивацевичи",25.3386,52.7091,3],["Марьина Горка",28.1478,53.5117,3]]
-cities=[[n,*[round(v,2) for v in P(x,y)],r] for n,x,y,r in cities]
+# all district centres (OpenStreetMap, data/district_centers.json); the ones not listed above get rank 4 (shown only close up)
+BE={}
+if os.path.exists("district_centers.json"):
+    have={c[0] for c in cities}
+    for d in json.load(open("district_centers.json",encoding="utf8")):
+        BE[d["ru"]]=d["be"]
+        if d["ru"] not in have: cities.append([d["ru"],d["lon"],d["lat"],4])
+cities=[[n,*[round(v,2) for v in P(x,y)],r,BE.get(n,"")] for n,x,y,r in cities]
 hq=np.round(h).astype(int)
 out={"grid":{"x0":round(float(xmin),2),"z0":round(float(zmin),2),"step":STEP,"nx":nx,"nz":nz,"h":hq.flatten().tolist()},
      "border":[[round(x,2),round(z,2)] for x,z in border],"rivers":rivers,"lakes":lakes,"cities":cities}
