@@ -754,7 +754,7 @@ function treeGeo(seed,colour){const parts=[],trunk=new THREE.CylinderGeometry(.0
 function rockGeo(seed){const g=jitter(new THREE.IcosahedronGeometry(.5,1),.11,seed);g.scale(1.15,.72,.9);const p=g.attributes.position;for(let i=0;i<p.count;i++)if(p.getY(i)<-.12)p.setY(i,-.12);
   return facet(g,(c,n)=>tone(n.y>.55?PAL.rock:"#857a8c",c.x*31+c.y*17+c.z*7+seed))}
 function houseGeo(seed,roof){const body=new THREE.BoxGeometry(.5,.36,.4);body.translate(0,.18,0);
-  const rf=new THREE.CylinderGeometry(.34,.34,.56,3,1);rf.rotateZ(Math.PI/2);rf.rotateX(Math.PI/2);rf.rotateY(Math.PI/2);rf.scale(1,.55,.72);rf.translate(0,.47,0);
+  const rf=new THREE.CylinderGeometry(.34,.34,.56,3,1);rf.rotateZ(Math.PI/2);rf.rotateX(-Math.PI/2);rf.rotateY(Math.PI/2);rf.scale(1,.55,.72);rf.translate(0,.45,0);   // ridge up
   return merge([facet(body,(c,n)=>tone(PAL.wall,c.x*9+c.z*3+seed,.8).multiplyScalar(n.y>.5?1:.97)),facet(rf,c=>tone(roof,c.x*7+c.y*5+seed,.9))])}
 function towerGeo(seed){const b=new THREE.BoxGeometry(.42,1,.42);b.translate(0,.5,0);const t=new THREE.ConeGeometry(.32,.3,4);t.rotateY(Math.PI/4);t.translate(0,1.15,0);
   return merge([facet(b,c=>tone("#f4efe6",c.y*11+seed,.6)),facet(t,c=>tone(PAL.accent,c.y*7+seed,.6))])}
