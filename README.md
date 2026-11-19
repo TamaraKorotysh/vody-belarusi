@@ -16,10 +16,13 @@
 
     cd data
     python ../scripts/group_rivers.py   # малые реки из tiles/ -> rivers_auto.json
+    python ../scripts/fix_mouths.py     # белорусские названия устьев
+    python ../scripts/book_rivers.py book.txt   # цифры малых рек по книге -> book_auto.json
+    python ../scripts/fix_mouths.py     # ручные поправки устьев и совпадений с книгой
+    python ../scripts/make_lake_cards.py   # карточки озёр из nom_lakes.json (fetch_lakes.py) -> ../cards_lakes.js
     python ../scripts/export_geo.py     # -> geo_ll.json
     python ../scripts/prep3d.py         # -> d3.json
     python ../scripts/prep_lp.py        # рельеф и вода -> lp.json
-    python ../scripts/book_rivers.py book.txt   # длина, бассейн, расход малых рек по книге -> book_auto.json
     python ../scripts/build_lp.py       # -> ../vody-belarusi.html
 
 Если менялись только тексты карточек или `lp_template.html`, достаточно `build_lp.py`.

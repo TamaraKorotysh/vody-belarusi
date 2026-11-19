@@ -1,4 +1,5 @@
 # Turn all downloaded river ways into whole rivers: group by name + connectivity, measure, find where each flows.
+MINKM = 20   # keep rivers at least this long inside Belarus (was 35 km)
 import json, glob, math, numpy as np
 from scipy.spatial import cKDTree
 ways = {}
@@ -75,7 +76,7 @@ for ri, r in enumerate(rivers):
     if mouth == r["ru"]: mouth = None
     if mouth and mouth.startswith("протока "): mouth = {"протока Старая Птичь": "Птичь"}.get(mouth, mouth)
     r["mouth"] = mouth
-keep = [r for r in rivers if r["kin"] >= 35 and r["ru"] not in CUR]
+keep = [r for r in rivers if r["kin"] >= MINKM and r["ru"] not in CUR]
 FIXMOUTH = {"Россь": "Неман", "Стыр": "Припять"}
 RENAME = {"Стыр": "Стырь", "Нарочанка": "Нарочь (река)"}
 for r in keep:

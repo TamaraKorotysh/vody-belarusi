@@ -53,6 +53,9 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .chip[aria-pressed="true"]{color:var(--accent)}.chip[aria-pressed="true"] i{background:var(--accent)}
 .credit{position:fixed;right:calc(env(safe-area-inset-right,0px) + 16px);bottom:calc(env(safe-area-inset-bottom,0px) + 2px);z-index:2;font-size:10px;color:var(--ink2);opacity:.75}
 .credit a{color:inherit}
+.scale{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 16px);transform:translateX(-50%);z-index:2;display:flex;flex-direction:column;align-items:flex-start;gap:2px;pointer-events:none}
+.scale i{display:block;height:6px;border:2px solid var(--ink);border-top:0;width:80px;background:linear-gradient(90deg,var(--ink) 0 50%,transparent 50%) bottom/100% 2px no-repeat;opacity:.8}
+.scale span{font-family:var(--f-display);font-size:11px;letter-spacing:.06em;color:var(--ink)}
 .tools{position:fixed;right:calc(env(safe-area-inset-right,0px) + 14px);bottom:calc(env(safe-area-inset-bottom,0px) + 14px);display:flex;gap:8px;z-index:3}
 .tools button{border-radius:999px;padding:9px 15px;font-family:var(--f-display);font-weight:500;letter-spacing:.06em;text-transform:uppercase;font-size:13px}
 #labels{position:fixed;inset:0;pointer-events:none;z-index:2;overflow:hidden}
@@ -93,6 +96,7 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   .list:not(.collapsed){right:10px}
   #listBody{max-height:52vh}
   .tools{top:calc(env(safe-area-inset-top,0px) + 74px);bottom:auto;right:10px}
+  .scale{left:14px;transform:none;bottom:calc(env(safe-area-inset-bottom,0px) + 62px)}
   .credit{bottom:calc(env(safe-area-inset-bottom,0px) + 8px);right:10px;max-width:165px;text-align:right;line-height:1.3}
   .tools button{padding:7px 12px;font-size:12px}
   .brand h1{font-size:21px}
@@ -104,6 +108,7 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 <div id="labels"></div>
 <div class="brand paper"><div class="lang" role="group" aria-label="Мова / Язык"><button data-l="be" aria-pressed="true">Бел</button><button data-l="ru" aria-pressed="false">Рус</button></div><h1 id="title">Воды <b>Беларусі</b></h1><p id="hint">Вращайте макет. Нажмите на булавку, затем на название.</p></div>
 <nav class="list paper collapsed" id="list" aria-label="Реки и озёра"><button class="ltog" id="listToggle" aria-expanded="false" aria-controls="listBody"><i class="ic"></i><span id="listLabel">Реки и озёра</span><i class="chev"></i></button><div id="listBody"></div></nav>
+<div class="scale" id="scale" aria-hidden="true"><i></i><span>50 км</span></div>
 <div class="credit" id="credit">Высоты увеличены в 40 раз · Данные: <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap</a>, рельеф: Mapzen / AWS Terrain Tiles</div>
 <div class="tools"><button class="paper" id="refill">Наполнить</button><button class="paper" id="home">Весь макет</button></div>
 <article class="card paper hide" id="card" aria-live="polite"></article>
@@ -113,6 +118,7 @@ addEventListener("error",e=>{const m=document.createElement("div");m.className="
 </script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/delaunator@5.0.1/delaunator.min.js"></script>
 <script>
 const L=/*LP*/;
 /*CARDS*/
@@ -126,7 +132,7 @@ let LANG="be";try{if(localStorage.getItem("lang")==="ru")LANG="ru"}catch(e){}   
 const TX={
  ru:{credit:"Высоты увеличены в 40 раз · Данные: <a href=\"https://www.openstreetmap.org/copyright\" target=\"_blank\" rel=\"noopener\">© OpenStreetMap</a>, рельеф: Mapzen / AWS Terrain Tiles",doc:"Воды Беларуси",title:"Воды <b>Беларуси</b>",hint:"Вращайте макет. Нажмите на булавку, затем на название.",refill:"Наполнить",home:"Весь макет",
   search:"Найти реку или озеро",searchAria:"Поиск по названию",list:"Реки и озёра",canvas:"Гранёный макет Беларуси с реками и озёрами",
-  river:"Река",lake:"Озеро",riverL:"река",lakeL:"озеро",more:"подробнее ›",route:"Откуда и куда",link:"Связь с реками",hist:"История названия",facts:"Интересные факты",
+  river:"Река",lake:"Озеро",res:"Водохранилище",canal:"Канал",riverL:"река",lakeL:"озеро",resL:"водохранилище",canalL:"канал",g_res:"Водохранилища",g_canal:"Каналы",more:"подробнее ›",route:"Откуда и куда",link:"Связь с реками",hist:"История названия",facts:"Интересные факты",
   close:"Закрыть",other:"по-белорусски: ",g_main:"Главные реки",g_minor:"Притоки",g_lake:"Озёра",g_auto:"Малые реки",
   len:"Длина",inBY:"По Беларуси",basin:"Бассейн",q:"Расход в устье",into:"Впадает в",left:"левый приток",right:"правый приток",
   noteCur:"Цифры сверены с «Блакітнай кнігай Беларусі» (1994). Версии происхождения названий взяты из других источников: в этой книге их нет.",
@@ -134,7 +140,7 @@ const TX={
   noteOsm:"Длина и устье посчитаны автоматически по данным OpenStreetMap; в «Блакітнай кнізе Беларусі» эту реку найти не удалось."},
  be:{credit:"Вышыні павялічаны ў 40 разоў · Даныя: <a href=\"https://www.openstreetmap.org/copyright\" target=\"_blank\" rel=\"noopener\">© OpenStreetMap</a>, рэльеф: Mapzen / AWS Terrain Tiles",doc:"Воды Беларусі",title:"Воды <b>Беларусі</b>",hint:"Круціце макет. Націсніце на пазнаку, потым на назву.",refill:"Напоўніць",home:"Увесь макет",
   search:"Знайсці раку або возера",searchAria:"Пошук па назве",list:"Рэкі і азёры",canvas:"Гранёны макет Беларусі з рэкамі і азёрамі",
-  river:"Рака",lake:"Возера",riverL:"рака",lakeL:"возера",more:"падрабязней ›",route:"Адкуль і куды",link:"Сувязь з рэкамі",hist:"Гісторыя назвы",facts:"Цікавыя факты",
+  river:"Рака",lake:"Возера",res:"Вадасховішча",canal:"Канал",riverL:"рака",lakeL:"возера",resL:"вадасховішча",canalL:"канал",g_res:"Вадасховішчы",g_canal:"Каналы",more:"падрабязней ›",route:"Адкуль і куды",link:"Сувязь з рэкамі",hist:"Гісторыя назвы",facts:"Цікавыя факты",
   close:"Закрыць",other:"па-руску: ",g_main:"Галоўныя рэкі",g_minor:"Прытокі",g_lake:"Азёры",g_auto:"Малыя рэкі",
   len:"Даўжыня",inBY:"Па Беларусі",basin:"Басейн",q:"Расход у вусці",into:"Упадае ў",left:"левы прыток",right:"правы прыток",
   noteCur:"Лічбы звераны з «Блакітнай кнігай Беларусі» (1994). Версіі паходжання назваў узяты з іншых крыніц: у гэтай кнізе іх няма.",
@@ -175,11 +181,14 @@ function facet(src,paint,extra){
     if(ex){const e=extra(_m,_n,i/3,_a,_b,_c);for(let v=0;v<3;v++)ex.push(...(Array.isArray(e[0])?e[v]:e))}}
   const out=new THREE.BufferGeometry();
   for(const [name,arr] of [["position",pos],["color",col],["normal",nor],["aCen",cen]])out.setAttribute(name,new THREE.Float32BufferAttribute(arr,3));
-  if(ex)out.setAttribute("aEx",new THREE.Float32BufferAttribute(ex,ex.length/(pos.length/3)));
+  if(ex){const n=ex.length/(pos.length/3);
+    if(n===6){const a=[],o=[];for(let i=0;i<ex.length;i+=6){a.push(ex[i],ex[i+1],ex[i+2],ex[i+3]);o.push(ex[i+4],ex[i+5])}
+      out.setAttribute("aEx",new THREE.Float32BufferAttribute(a,4));out.setAttribute("aOff",new THREE.Float32BufferAttribute(o,2))}
+    else out.setAttribute("aEx",new THREE.Float32BufferAttribute(ex,n))}
   return out}
 function merge(list){const out=new THREE.BufferGeometry();for(const name of Object.keys(list[0].attributes)){const size=list[0].attributes[name].itemSize,arr=new Float32Array(list.reduce((s,g)=>s+g.attributes[name].array.length,0));let o=0;for(const g of list){arr.set(g.attributes[name].array,o);o+=g.attributes[name].array.length}out.setAttribute(name,new THREE.BufferAttribute(arr,size))}return out}
 function jitter(geo,amount,seed=1){const p=geo.attributes.position;for(let i=0;i<p.count;i++){const k=Math.round(p.getX(i)*500)*.731+Math.round(p.getY(i)*500)*1.913+Math.round(p.getZ(i)*500)*3.377+seed*17.17;p.setXYZ(i,p.getX(i)+(hash(k,1)-.5)*2*amount,p.getY(i)+(hash(k,2)-.5)*2*amount,p.getZ(i)+(hash(k,3)-.5)*2*amount)}return geo}
-const clock={value:0};
+const clock={value:0},riverWidth={value:1};
 // the one material: flat-shaded, per-facet colour, matte; options add water motion
 function faceted(o={}){
   const m=new THREE.MeshStandardMaterial({vertexColors:true,flatShading:true,roughness:o.roughness==null?.92:o.roughness,metalness:0,side:o.side||THREE.FrontSide});
@@ -221,7 +230,18 @@ const sky=new THREE.Mesh(new THREE.SphereGeometry(900,32,16),new THREE.ShaderMat
 scene.add(sky);
 
 // ---------------------------------------------------------------- terrain
-const P=L.pts,TRI=L.tri,NP=P.length/3;
+const P=L.pts,NP=P.length/3;
+// the terrain triangles are built here rather than shipped: Delaunay over the points, keeping triangles inside the border with no long edges
+const TRI=L.tri||(()=>{const xy=new Float64Array(NP*2);for(let i=0;i<NP;i++){xy[i*2]=P[i*3];xy[i*2+1]=P[i*3+2]}
+  const t=new Delaunator(xy).triangles,B=L.border,cs=.2;let x0=1e9,z0=1e9,x1=-1e9,z1=-1e9;for(const [x,z] of B){x0=Math.min(x0,x);z0=Math.min(z0,z);x1=Math.max(x1,x);z1=Math.max(z1,z)}
+  const nx=Math.ceil((x1-x0)/cs)+1,nz=Math.ceil((z1-z0)/cs)+1,mask=new Uint8Array(nx*nz);
+  for(let j=0;j<nz;j++){const z=z0+(j+.5)*cs,xs=[];for(let i=0,k=B.length-1;i<B.length;k=i++){const [ax,az]=B[i],[bx,bz]=B[k];if((az>z)!==(bz>z))xs.push(ax+(z-az)*(bx-ax)/(bz-az))}
+    xs.sort((a,b)=>a-b);for(let q=0;q+1<xs.length;q+=2){const a=Math.max(0,Math.ceil((xs[q]-x0)/cs-.5)),b=Math.min(nx-1,Math.floor((xs[q+1]-x0)/cs-.5));for(let i=a;i<=b;i++)mask[j*nx+i]=1}}
+  const out=[];for(let k=0;k<t.length;k+=3){const a=t[k]*2,b=t[k+1]*2,c=t[k+2]*2,cx=(xy[a]+xy[b]+xy[c])/3,cz=(xy[a+1]+xy[b+1]+xy[c+1])/3;
+    const i=Math.floor((cx-x0)/cs),j=Math.floor((cz-z0)/cs);if(i<0||j<0||i>=nx||j>=nz||!mask[j*nx+i])continue;
+    const e=Math.max(Math.hypot(xy[a]-xy[b],xy[a+1]-xy[b+1]),Math.hypot(xy[b]-xy[c],xy[b+1]-xy[c+1]),Math.hypot(xy[c]-xy[a],xy[c+1]-xy[a+1]));if(e>=3.5)continue;
+    out.push(t[k],t[k+1],t[k+2])}
+  return new Uint32Array(out)})();
 for(let k=0;k<TRI.length;k+=3){const a=TRI[k]*3,b=TRI[k+1]*3,c=TRI[k+2]*3;const up=(P[b+2]-P[a+2])*(P[c]-P[a])-(P[b]-P[a])*(P[c+2]-P[a+2]);if(up<0){const t=TRI[k+1];TRI[k+1]=TRI[k+2];TRI[k+2]=t}}
 const terrainGeo=(()=>{const pos=new Float32Array(TRI.length*3);for(let k=0;k<TRI.length;k++){const i=TRI[k];pos[k*3]=P[i*3];pos[k*3+1]=P[i*3+1];pos[k*3+2]=P[i*3+2]}
   const g=new THREE.BufferGeometry();g.setAttribute("position",new THREE.BufferAttribute(pos,3));return g})();
@@ -234,8 +254,9 @@ const lakeRings=Object.entries(L.lakes).map(([n,lk])=>({n,lk}));
 function paintLand(c,n,k){
   const key=c.x*12.9898+c.z*78.233,j=hash(key,5)-.5,m=triM(k),rv=riverNear(c.x,c.z);
   let name;
-  if(rv.d<rv.hw*.9&&c.y<rv.y)name="bed";
-  else if(rv.d<rv.hw+.6&&n.y<.93)name="sand";
+  // channel bed and banks are green floodplain, so the thin water line of the overview sits in a meadow valley
+  if(rv.d<rv.hw*.9&&c.y<rv.y)name=hash(key,6)<.5?"swamp":"swamp2";
+  else if(rv.d<rv.hw+.6&&n.y<.93)name=hash(key,7)<.25?"sand":"meadow";
   else if(n.y<.7)name=hash(key,9)<.5?"upland":"sand";
   else{
     const fz=forestN(c.x,c.z),swamp=c.z>13&&m<168&&vn(c.x*.35+7,c.z*.35)>.45;
@@ -281,6 +302,7 @@ const items={},clickables=[];
 const waterBody=`float fu=clamp((uTime-(uT0+aEx.x/uSpeed))/0.42,0.,1.);
   float fo=1.-pow(1.-fu,3.)+.25*sin(fu*3.14159)*fu;
   transformed=aEx.yzw+(transformed-aEx.yzw)*fo;
+  transformed.xz-=aOff*(1.-uWidth);
   transformed.y+=sin(aCen.x*1.7+uTime*1.3)*cos(aCen.z*1.4-uTime*1.1)*.025*fu;`;
 const waterTint=`float fl=fract(aEx.x*.22-uTime*.75+fract(aCen.x*37.+aCen.z*17.)*.35);
   vColor.rgb=mix(vColor.rgb,vec3(.86,.97,.96),.55*smoothstep(.72,.86,fl)*smoothstep(1.,.86,fl));
@@ -293,18 +315,18 @@ for(const [name,r] of Object.entries(L.rivers)){
     const rows=line.filter((_,i)=>i%2===0||i===line.length-1);
     const at=(i,k)=>{const p=rows[i],p0=rows[Math.max(0,i-1)],p1=rows[Math.min(rows.length-1,i+1)];let tx=p1[0]-p0[0],tz=p1[1]-p0[1];const Lx=Math.hypot(tx,tz)||1;tx/=Lx;tz/=Lx;
       const hw=r.w*(.45+.55*Math.min(1,p[2]/r.D))*.3+.06,inner=k===1||k===2,jj=inner?(hash(i,k)-.5)*.14:0,off=[-1,-.36,.36,1][k]*hw;
-      return [p[0]-tz*off+tx*jj,p[3]+(inner?(hash(i,k+5)-.5)*.03:0),p[1]+tx*off+tz*jj,p[2]]};
+      return [p[0]-tz*off+tx*jj,p[3]+(inner?(hash(i,k+5)-.5)*.03:0),p[1]+tx*off+tz*jj,p[2],-tz*off,tx*off]};
     for(let i=0;i+1<rows.length;i++)for(let k=0;k<3;k++){
       const a=at(i,k),b=at(i,k+1),c=at(i+1,k),d=at(i+1,k+1);
       const quad=(i+k)%2?[[a,b,c],[b,d,c]]:[[a,b,d],[a,d,c]];
       for(const t of quad){const up=(t[1][2]-t[0][2])*(t[2][0]-t[0][0])-(t[1][0]-t[0][0])*(t[2][2]-t[0][2]);const tt=up<0?[t[0],t[2],t[1]]:t;
         // pivot = most upstream corner; born at the triangle's mean distance
         const piv=tt.reduce((m,v)=>v[3]<m[3]?v:m,tt[0]),dm=(tt[0][3]+tt[1][3]+tt[2][3])/3+hash(i,k)*.6;
-        for(const v of tt)tris.push(v[0],v[1],v[2]);exTri.push([dm,piv[0],piv[1],piv[2]])}}
+        for(const v of tt)tris.push(v[0],v[1],v[2]);exTri.push(tt.map(v=>[dm,piv[0],piv[1],piv[2],v[4],v[5]]))}}
   }
   const g=new THREE.BufferGeometry();g.setAttribute("position",new THREE.Float32BufferAttribute(tris,3));
   const fg=facet(g,c=>tone(PAL.river,c.x*5.3+c.z*9.1,1.3),(m,n,ti)=>exTri[ti]);
-  const mat=faceted({roughness:.32,uniforms:uni,head:"attribute vec4 aEx;uniform float uT0,uSpeed,uSel;\n",body:waterBody,tint:waterTint});
+  const mat=faceted({roughness:.32,uniforms:Object.assign({uWidth:riverWidth},uni),head:"attribute vec4 aEx;attribute vec2 aOff;uniform float uT0,uSpeed,uSel,uWidth;\n",body:waterBody,tint:waterTint});
   const m=meshOf(fg,mat,{cast:false});m.userData.name=name;scene.add(m);clickables.push(m);
   const main=r.lines.reduce((a,b)=>a.length>b.length?a:b);const mid=main[Math.floor(main.length*.5)];
   items[name]={type:"river",uni,mid:new THREE.Vector3(mid[0],mid[3],mid[1]),len:r.D,main,minor,auto};
@@ -319,10 +341,10 @@ for(const [name,lk] of Object.entries(L.lakes)){
   const fg=facet(g,c=>{const r=Math.hypot(c.x-cx,c.z-cz);return tone(r<.6?PAL.lakeDeep:PAL.lake,c.x*3.1+c.z*7.7,1.2)},(m,n,ti)=>exTri[ti]);
   const minor=!!(CARDS[name]&&CARDS[name].minor);
   const uni={uT0:{value:reduce?-99:(minor?3:1.2)},uSpeed:{value:6},uSel:{value:0}};
-  const mat=faceted({roughness:.3,uniforms:uni,head:"attribute vec4 aEx;uniform float uT0,uSpeed,uSel;\n",body:waterBody,
+  const mat=faceted({roughness:.3,uniforms:Object.assign({uWidth:riverWidth},uni),head:"attribute vec4 aEx;attribute vec2 aOff;uniform float uT0,uSpeed,uSel,uWidth;\n",body:waterBody,
     tint:`float fl=fract((aCen.x*.9-aCen.z*.5)*.9+uTime*.6+fract(aCen.x*37.+aCen.z*17.)*.4);vColor.rgb=mix(vColor.rgb,vec3(.86,.97,.96),.45*smoothstep(.75,.88,fl)*smoothstep(1.,.88,fl));float gw=.5+.5*sin((aCen.x+aCen.z)*1.3-uTime*3.);vColor.rgb=mix(vColor.rgb,vec3(.2,.64,1.35)*(1.2+.6*gw),uSel*.95);`});
   const m=meshOf(fg,mat,{cast:false});m.userData.name=name;scene.add(m);clickables.push(m);
-  items[name]={type:"lake",uni,mid:new THREE.Vector3(cx,lk.level,cz),len:6,minor};
+  items[name]={type:"lake",uni,mid:new THREE.Vector3(cx,lk.level,cz),len:6,minor,auto:!!(CARDS[name]&&CARDS[name].small)};   // small lakes: pins only close up
 }
 
 // ---------------------------------------------------------------- flow arrows: small chevrons drifting downstream on the main rivers
@@ -373,11 +395,12 @@ const nearCity=(x,z)=>L.cities.some(([n,cx,cz,r])=>Math.hypot(x-cx,z-cz)<(n==="�
   const MAXT=mobile?5200:10000;let n=0;
   for(let t=0;t<90000&&n<MAXT;t++){
     const x=x0+rnd()*(x1-x0),z=z0+rnd()*(z1-z0),fz=forestN(x,z);
-    const dP=Math.hypot(x-PUSHCHA[0],z-PUSHCHA[1]);if(dP<1.6)continue;const inForest=fz>.53||dP<4.5;if(!inForest&&rnd()>.03)continue;
+    const dP=Math.hypot(x-PUSHCHA[0],z-PUSHCHA[1]);if(dP<1.6)continue;const inForest=fz>.53||dP<4.5;if(!inForest&&rnd()>.018)continue;
+    if(inForest&&dP>=4.5&&rnd()>.3+.7*vn(x*.07+11,z*.07-5))continue;   // thinner patches and glades inside the forests
     if(!inPoly(x,z,B))continue;const rv=riverNear(x,z);if(rv.d<rv.hw+.9)continue;if(nearCity(x,z))continue;
     const y=heightAt(x,z);if(y==null)continue;
     const polesie=z>13;const kind=inForest?(polesie?(rnd()<.5?"tree":"pine2"):(rnd()<.62?(rnd()<.5?"pine":"pine2"):(rnd()<.2?"ochre":"tree"))):(rnd()<.3?"ochre":"tree");
-    place[kind].push([x,y-.03,z,.45+rnd()*.3,rnd()*6.28,(rnd()-.5)*.1]);n++}
+    place[kind].push([x,y-.03,z,.32+rnd()*.22,rnd()*6.28,(rnd()-.5)*.1]);n++}
   for(let t=0;t<3000;t++){const x=x0+rnd()*(x1-x0),z=z0+rnd()*(z1-z0);if(!inPoly(x,z,B))continue;const rv=riverNear(x,z);if(!(rv.d>rv.hw+.4&&rv.d<rv.hw+1.4)||rnd()>.25)continue;const y=heightAt(x,z);if(y==null)continue;place.rock.push([x,y-.02,z,.25+rnd()*.35,rnd()*6.28,0])}
   for(const [nm,cx,cz,r] of L.cities){const count=nm==="Минск"?60:r===1?28:r===2?13:r===3?6:4,spread=nm==="Минск"?2.4:r===1?1.7:r===2?1.15:r===3?.75:.5;
     for(let k=0,tries=0;k<count&&tries<count*40;tries++){   /* towns on rivers: look a little further out until the houses fit */const grow=1+tries/(count*8),a=rnd()*6.283,rr=Math.sqrt(rnd())*spread*Math.min(grow,2.2),x=cx+Math.cos(a)*rr,z=cz+Math.sin(a)*rr;const rv=riverNear(x,z);if(rv.d<rv.hw+(r>2?.3:.45))continue;const y=heightAt(x,z);if(y==null)continue;k++;
@@ -470,7 +493,7 @@ for(const [name,it] of Object.entries(items)){
 const bubble=document.createElement("button");bubble.className="bubble";bubble.hidden=true;document.body.appendChild(bubble);
 let bubbleFor=null;
 function highlight(n){for(const [k,it] of Object.entries(items))it.uni.uSel.value=k===n?1:0}
-function openBubble(n){if(selected&&selected!==n){selected=null;card.classList.add("hide");for(const b of Object.values(chips))b.setAttribute("aria-pressed","false")}highlight(n);bubbleFor=n;const it=items[n];bubble.innerHTML=`<span class="bk">${it.type==="lake"?tx("lakeL"):tx("riverL")}</span><span class="bn">${dname(n)}</span><span class="bm">${tx("more")}</span>`;bubble.hidden=false}
+function openBubble(n){if(selected&&selected!==n){selected=null;card.classList.add("hide");for(const b of Object.values(chips))b.setAttribute("aria-pressed","false")}highlight(n);bubbleFor=n;const it=items[n];bubble.innerHTML=`<span class="bk">${CARDS[n]&&CARDS[n].type==="canal"?tx("canalL"):CARDS[n]&&CARDS[n].type==="reservoir"?tx("resL"):it.type==="lake"?tx("lakeL"):tx("riverL")}</span><span class="bn">${dname(n)}</span><span class="bm">${tx("more")}</span>`;bubble.hidden=false}
 function closeBubble(){bubbleFor=null;bubble.hidden=true;highlight(selected)}
 bubble.onclick=()=>{if(bubbleFor)select(bubbleFor,true)};
 // ---------------------------------------------------------------- city labels
@@ -487,13 +510,14 @@ function placeLabels(){const w=innerWidth,h=innerHeight;for(const l of labels){
 const list=document.getElementById("list"),listBody=document.getElementById("listBody"),listToggle=document.getElementById("listToggle"),card=document.getElementById("card"),chips={};
 const narrow=matchMedia("(max-width:760px)").matches;
 const search=document.createElement("input");search.type="search";search.id="search";
-const openGroups={main:true,minor:false,lake:true,auto:false};let groups=[];
+const openGroups={main:true,minor:false,lake:true,res:false,canal:false,auto:false};let groups=[];
 function buildList(){listBody.textContent="";listBody.appendChild(search);groups=[];for(const k of Object.keys(chips))delete chips[k];
   search.placeholder=tx("search");search.setAttribute("aria-label",tx("searchAria"));
-  for(const [key,type] of [["main","river"],["minor","river"],["lake","lake"],["auto","river"]]){
-    const ents=Object.entries(CARDS).filter(([n,c])=>c.type===type&&items[n]&&(type==="lake"||(key==="main"?!c.minor:key==="minor"?(c.minor&&!c.auto):c.auto)));
+  for(const [key,type] of [["main","river"],["minor","river"],["lake","lake"],["res","reservoir"],["canal","canal"],["auto","river"]]){
+    const ents=Object.entries(CARDS).filter(([n,c])=>c.type===type&&items[n]&&(type!=="river"||(key==="main"?!c.minor:key==="minor"?(c.minor&&!c.auto):c.auto)));
     if(!ents.length)continue;
     if(key==="minor"||key==="auto")ents.sort((a,b)=>listName(a[0]).localeCompare(listName(b[0]),LANG));
+    if(key==="lake")ents.sort((a,b)=>(!!a[1].small-!!b[1].small)||(a[1].small?listName(a[0]).localeCompare(listName(b[0]),LANG):0));
     const h=document.createElement("button");h.className="grp";h.innerHTML=`<span>${tx("g_"+key)}</span><small>${ents.length}</small><i></i>`;
     h.onclick=()=>{openGroups[key]=!openGroups[key];filter()};listBody.appendChild(h);const g={key,h,chips:[]};groups.push(g);
     for(const [n,c] of ents){const b=document.createElement("button");b.className="chip "+type+(c.minor?" minor":"");b.setAttribute("aria-pressed",String(n===selected));
@@ -519,14 +543,14 @@ camera.position.copy(reduce?HOME.pos:INTRO.pos);controls.target.copy(reduce?HOME
 let fly=null,selected=null,T=0;
 function flyTo(t,p,dur=1700){fly={t0:performance.now(),dur:reduce?1:dur,fromT:controls.target.clone(),fromP:camera.position.clone(),toT:t,toP:p}}
 if(!reduce)setTimeout(()=>flyTo(HOME.target.clone(),HOME.pos.clone(),4200),700);
-function renderCard(n){const c=CARDS[n],lake=c.type==="lake",be=LANG==="be",cb=be&&typeof CARDS_BE!=="undefined"&&CARDS_BE[n];
+function renderCard(n){const c=CARDS[n],lake=c.type==="lake"||c.type==="reservoir",res=c.type==="reservoir",canal=c.type==="canal",be=LANG==="be",cb=be&&typeof CARDS_BE!=="undefined"&&CARDS_BE[n];
   let stats=cb?cb.stats:c.stats,from=cb?cb.from:c.from,to=cb?cb.to:c.to,hist=cb?cb.name:c.name,facts=cb?cb.facts:c.facts,note=tx("noteCur");
   if(c.auto){const num=v=>String(v).replace(".",",");stats=[[tx("len"),(c.book?"":"≈ ")+num(c.km)+" км"]];
     if(!c.book)stats.push([tx("inBY"),"≈ "+c.kin+" км"]);if(c.basin)stats.push([tx("basin"),c.basin+" км²"]);if(c.q)stats.push([tx("q"),c.q+" м³/с"]);
     const mo=be?c.mouthBe:c.mouth;if(mo)stats.push([tx("into"),mo+(c.side?` <small>(${tx(c.side==="левы"?"left":"right")})</small>`:"")]);
     from=["",""];to=["",""];hist="";facts=[];note=c.book?tx("noteBook"):tx("noteOsm")}
   const other=be?plain(n):(c.be&&c.be!=="—"?c.be:"");
-  card.innerHTML=`<button class="close" id="close" aria-label="${tx("close")}">×</button><div class="kind">${lake?tx("lake"):tx("river")}</div><h2>${dname(n)}</h2>${other?`<div class="be">${tx("other")}${other}</div>`:""}
+  card.innerHTML=`<button class="close" id="close" aria-label="${tx("close")}">×</button><div class="kind">${res?tx("res"):canal?tx("canal"):lake?tx("lake"):tx("river")}</div><h2>${dname(n)}</h2>${other?`<div class="be">${tx("other")}${other}</div>`:""}
   <dl class="stats">${stats.map(([k,v])=>`<div><dt>${k}</dt><dd>${v}</dd></div>`).join("")}</dl>
   ${from[0]?`<h3>${lake?tx("link"):tx("route")}</h3><div class="route"><span class="dot"></span><span><b>${from[0]}</b><small>${from[1]}</small></span><span class="ln"></span><span></span><span class="dot end"></span><span><b>${to[0]}</b><small>${to[1]}</small></span></div>`:""}
   ${hist?`<h3>${tx("hist")}</h3><p>${hist}</p>`:""}${facts.length?`<h3>${tx("facts")}</h3><ul>${facts.map(f=>`<li>${f}</li>`).join("")}</ul>`:""}
@@ -545,7 +569,7 @@ function select(n,doFly){
   for(const [k,it] of Object.entries(items)){it.uni.uSel.value=k===n?1:0;chips[k]&&chips[k].setAttribute("aria-pressed",k===n)}
   if(!n){card.classList.add("hide");closeBubble();return}
   const it=items[n];openBubble(n);if(!reduce){it.uni.uT0.value=T+.15;it.pin.t0=T+.15+(it.type==="river"?it.len*.45/it.uni.uSpeed.value:.6)}
-  const c=CARDS[n],lake=c.type==="lake";renderCard(n);
+  const c=CARDS[n],lake=c.type==="lake"||c.type==="reservoir";renderCard(n);
   card.classList.remove("hide");
   if(doFly){const t=it.mid.clone(),dir=camera.position.clone().sub(controls.target).normalize();dir.y=Math.max(dir.y,.6);dir.normalize();
     const dist=(lake?26:Math.min(92,26+it.len*.55))*(portrait?1.5:1);const pos=t.clone().add(dir.clone().multiplyScalar(dist));
@@ -567,11 +591,16 @@ function resize(){renderer.setSize(innerWidth,innerHeight,false);camera.aspect=i
 addEventListener("resize",resize);resize();
 document.getElementById("loading").remove();
 const start=performance.now();
+const scaleBar=document.querySelector("#scale i"),scaleLbl=document.querySelector("#scale span"),_sa=new THREE.Vector3(),_sb=new THREE.Vector3(),_sr=new THREE.Vector3();let scaleTick=0;
 function loop(now){
   T=(now-start)/1000;clock.value=reduce?50:T;
   for(const [m,x,y,z,seed] of clouds)m.position.set(x+((T*.6+seed*13)%40)-20,y+.4*Math.sin(T*.5+seed),z);
-  updateStorks(T);updateHerd(T);
-  camD=camera.position.distanceTo(controls.target);const fs=Math.min(portrait?5:3.6,Math.max(.6,camD/38));
+  updateStorks(T);
+  if((++scaleTick)%8===0){_sa.copy(controls.target);_sr.setFromMatrixColumn(camera.matrixWorld,0);_sr.y=0;_sr.normalize();_sb.copy(_sa).add(_sr);
+    _sa.project(camera);_sb.project(camera);const px=Math.hypot((_sb.x-_sa.x)*innerWidth/2,(_sb.y-_sa.y)*innerHeight/2)/6.95;
+    let km=1;for(const k of [1,2,5,10,20,50,100,200])if(k*px<=110)km=k;scaleBar.style.width=(km*px).toFixed(0)+"px";scaleLbl.textContent=km+" км"}updateHerd(T);
+  camD=camera.position.distanceTo(controls.target);riverWidth.value=.3+.7*Math.min(1,Math.max(0,(130-camD)/110));   // thin rivers on the overview, full width close up
+  const fs=Math.min(portrait?5:3.6,Math.max(.6,camD/38));
   for(const p of pins){const t=reduce?9:T-p.t0,a=spring(t,2.6,.38);const near=(p.auto?camD<38:(!p.minor||camD<70))||p.name===selected||p.name===bubbleFor;
     p.m.visible=(reduce||t>0)&&near;const s=fs*(p.auto?.65:p.minor?.8:1)*(p.name===bubbleFor?1.25:1);p.m.scale.set(s,s*Math.max(.001,a),s)}
   updateArrows(T,camD);

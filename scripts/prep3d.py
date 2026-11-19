@@ -37,7 +37,7 @@ def inside(xs,zs):
     return c
 W={"Днепр":1.25,"Припять":1.1,"Западная Двина":1.1,"Неман":1.1,"Березина":.95,"Сож":.95,"Западный Буг":.85,"Вилия":.85,"Птичь":.65,"Свислочь":.6}
 from collections import defaultdict
-W=defaultdict(lambda:.3,W);W.update({k:.42 for k in ["Ясельда","Мухавец","Случь","Лань","Уборть","Друть","Ипуть","Беседь","Проня","Ведрич","Дисна","Улла","Лучоса","Нарев","Лесная","Зельвянка","Котра","Оресса","Гайна","Щара","Горынь"] if k not in W});W.update({"Щара":.65,"Горынь":.7,"Стырь":.6,"Друть":.6,"Ипуть":.6,"Ясельда":.55,"Случь":.5,"Беседь":.55,"Уборть":.55,"Мухавец":.5,"Нарев":.5,"Зельвянка":.48,"Котра":.45})
+W=defaultdict(lambda:.3,W);W.update({k:.26 for k in ["Днепровско-Бугский канал","Огинский канал","Августовский канал","Вилейско-Минский канал"]});W.update({k:.42 for k in ["Ясельда","Мухавец","Случь","Лань","Уборть","Друть","Ипуть","Беседь","Проня","Ведрич","Дисна","Улла","Лучоса","Нарев","Лесная","Зельвянка","Котра","Оресса","Гайна","Щара","Горынь"] if k not in W});W.update({"Щара":.65,"Горынь":.7,"Стырь":.6,"Друть":.6,"Ипуть":.6,"Ясельда":.55,"Случь":.5,"Беседь":.55,"Уборть":.55,"Мухавец":.5,"Нарев":.5,"Зельвянка":.48,"Котра":.45})
 rivers={}; lakes={}
 for f in G["water"]["features"]:
     n=f["properties"]["name"]
@@ -61,8 +61,40 @@ for f in G["water"]["features"]:
                 out.append(p)
             return np.array(out)
         segs=[dens(s) for s in segs]
+        # pieces of one river that OSM split apart: glue end-to-start (flow order), else end-end / start-start, if they nearly touch
+        TOL=.6; d2=lambda p,q:float(np.hypot(*(p-q)))
+        changed=True
+        while changed and len(segs)>1:
+            changed=False
+            for i in range(len(segs)):
+                for j in range(len(segs)):
+                    if i==j: continue
+                    a,b=segs[i],segs[j]
+                    if d2(a[-1],b[0])<TOL: segs[i]=np.vstack([a,b])
+                    elif d2(a[-1],b[-1])<TOL and len(a)>=len(b): segs[i]=np.vstack([a,b[::-1]])
+                    elif d2(a[0],b[0])<TOL and len(a)>=len(b): segs[i]=np.vstack([b[::-1],a])
+                    else: continue
+                    del segs[j]; changed=True; break
+                if changed: break
+        # second pass: long pieces with a missing stretch of data between them (up to ~16 km) are bridged with a straight join
+        seglen=lambda q:float(np.sum(np.hypot(*np.diff(q,axis=0).T)))
+        changed=True
+        while changed and len(segs)>1:
+            changed=False
+            for i in range(len(segs)):
+                for j in range(len(segs)):
+                    if i==j or seglen(segs[i])<1 or seglen(segs[j])<1: continue
+                    a,b=segs[i],segs[j]
+                    if d2(a[-1],b[0])<2.3: segs[i]=dens(np.vstack([a,b]))
+                    elif d2(a[-1],b[-1])<2.3 and len(a)>=len(b): segs[i]=dens(np.vstack([a,b[::-1]]))
+                    elif d2(a[0],b[0])<2.3 and len(a)>=len(b): segs[i]=dens(np.vstack([b[::-1],a]))
+                    else: continue
+                    del segs[j]; changed=True; break
+                if changed: break
         lens=[np.r_[0,np.cumsum(np.hypot(*np.diff(s,axis=0).T))] for s in segs]
-        segs=[(s,l) for s,l in zip(segs,lens) if l[-1]>1.5]
+        longs=[s for s,l in zip(segs,lens) if l[-1]>1.5]
+        near_long=lambda s:any(min(d2(s[0],q),d2(s[-1],q))<TOL for t in longs for q in t[::3])
+        segs=[(s,l) for s,l in zip(segs,lens) if l[-1]>1.5 or (len(s)>1 and near_long(s))]   # short connectors stay
         segs.sort(key=lambda t:-t[1][-1])
         if not segs: print('skip',n); continue
         main,ml=segs[0]; out=[]

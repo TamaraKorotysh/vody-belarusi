@@ -37,8 +37,12 @@ for r in auto:
     best = max(cands, key=score)
     if abs(best["km"] - r["km"]) / max(best["km"], 1) > .6 and not (mb and best["into"] and norm(best["into"]).startswith(mb)):
         miss.append(r["id"] + " (?)"); continue
-    stem_ok = lambda e: norm(e["into"]).startswith(mb) or norm(e["into"]).startswith("ЗАХ") or (mb == "САЖ" and norm(e["into"]).startswith("СОЖ"))
-    if mb and best["into"] and not stem_ok(best) and abs(best["km"] - r["kin"]) / best["km"] > .3:
+    def stem_ok(e):   # the book gives the mouth in the genitive: compare the stem without the case ending
+        into = norm(e["into"].replace("-", "")); mo = norm(r.get("mouth_be") or "")
+        if mo.startswith("ЗАХ"): return into.startswith("ЗАХ")
+        if {mo[:3], into[:3]} <= {"СОЖ", "САЖ"}: return True
+        k = min(3, max(2, len(mo) - 1)); return into[:k] == mo[:k]
+    if mb and best["into"] and not stem_ok(best):
         miss.append(r["id"] + " (другое устье)"); continue
     out[r["id"]] = best
 json.dump(out, open(os.path.join(root, "data", "book_auto.json"), "w", encoding="utf8"), ensure_ascii=False, indent=0)

@@ -59,12 +59,12 @@ for n, polys in D["lakes"].items():
 
 # ---- points
 pts = []
-SP = 0.72
+SP = 0.21   # base point spacing (0.72 before): about twice as many terrain triangles overall
 gx, gz = np.meshgrid(np.arange(bx.min() - 1, bx.max() + 1, SP), np.arange(bz.min() - 1, bz.max() + 1, SP * 0.866))
 gx = gx + (np.arange(gx.shape[0])[:, None] % 2) * SP / 2
 P = np.c_[gx.ravel(), gz.ravel()] + rng.uniform(-0.3, 0.3, (gx.size, 2)) * SP
-dist, _ = ctree.query(P)
-P = P[dist > .9]                                    # channels get their own points
+dist, ci = ctree.query(P)
+P = P[dist > cinfo[ci, 0] + .32]                     # channels get their own points: keep clear of each river by its own width
 P = P[inside(P[:, 0], P[:, 1])]
 pts.append(P)
 # denser band around rivers
@@ -111,17 +111,19 @@ ok = inside(c[:, 0], c[:, 1])
 e = np.max(np.stack([np.hypot(*(P[tri[:, a]] - P[tri[:, b]]).T) for a, b in ((0, 1), (1, 2), (2, 0))]), axis=0)
 tri = tri[ok & (e < 3.5)]
 print("triangles", len(tri))
-out = {"pts": np.round(np.c_[P[:, 0], y, P[:, 1]], 3).ravel().tolist(), "m": np.round(m).astype(int).tolist(), "tri": tri.ravel().tolist(),
+out = {"pts": np.round(np.c_[P[:, 0], y, P[:, 1]], 3).ravel().tolist(), "m": np.round(m).astype(int).tolist(), 
        "border": D["border"], "borderY": np.round(yof(meters(bx, bz)), 3).tolist(),
        "rivers": rivers_out, "lakes": lakes_out, "cities": D["cities"]}
 s = json.dumps(out, ensure_ascii=False, separators=(",", ":")); open("lp.json", "w", encoding="utf8").write(s); print("bytes", len(s))
 
 # ---- lake water surfaces: their own irregular triangles
+drop = []
 for n, lk in lakes_out.items():
     allp = []; alltri = []
     for poly in lk["polys"]:
         ring = np.array(poly[0], float); holes = [np.array(h, float) for h in poly[1:]]
-        bp = [resample(ring, 0.22)] + [resample(h, 0.22) for h in holes]
+        per = float(np.sum(np.hypot(*np.diff(np.vstack([ring, ring[:1]]), axis=0).T))); stp = min(0.22, per / 12)   # small lakes still get a dozen shore points
+        bp = [resample(ring, stp)] + [resample(h, stp) for h in holes]
         x0, z0 = ring.min(axis=0); x1, z1 = ring.max(axis=0)
         gx, gz = np.meshgrid(np.arange(x0, x1, .3), np.arange(z0, z1, .26))
         ip = np.c_[gx.ravel(), gz.ravel()] + rng.uniform(-.09, .09, (gx.size, 2))
@@ -130,12 +132,17 @@ for n, lk in lakes_out.items():
         ip = ip[ins]
         if len(ip): ip = ip[cKDTree(np.vstack(bp)).query(ip)[0] > .14]
         Q = np.vstack(bp + ([ip] if len(ip) else []))
-        tr = Delaunay(Q).simplices; cc = Q[tr].mean(axis=1)
+        if len(Q) < 4: continue   # a sliver of a multipolygon: nothing to triangulate
+        try: tr = Delaunay(Q).simplices
+        except Exception: continue   # a flat sliver of a multipolygon
+        cc = Q[tr].mean(axis=1)
         ok = inside(cc[:, 0], cc[:, 1], ring[:, 0], ring[:, 1])
         for h in holes: ok &= ~inside(cc[:, 0], cc[:, 1], h[:, 0], h[:, 1])
         base = sum(len(a) for a in allp); allp.append(Q); alltri.append(tr[ok] + base)
+    if not allp: drop.append(n); continue   # nothing big enough to draw
     Q = np.vstack(allp); T = np.vstack(alltri)
     lk["pts"] = np.round(Q, 3).ravel().tolist(); lk["tri"] = T.ravel().tolist(); del lk["polys"]
     print(n, len(Q), len(T))
+for n in drop: print("lake too small to draw:", n); lakes_out.pop(n)
 out["lakes"] = lakes_out
 s = json.dumps(out, ensure_ascii=False, separators=(",", ":")); open("lp.json", "w", encoding="utf8").write(s); print("bytes", len(s))
