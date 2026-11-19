@@ -1,6 +1,6 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,interactive-widget=resizes-content">
-<title>Воды Беларуси</title>
+<title>Воды Беларусі</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;700&family=Nunito:wght@500;700;800&display=swap">
 <style>
@@ -99,10 +99,10 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 }
 </style>
 
-<div class="loading" id="loading">Складываем макет…</div>
+<div class="loading" id="loading">Складваем макет…</div>
 <canvas id="c" tabindex="0" aria-label="Гранёный макет Беларуси с реками и озёрами"></canvas>
 <div id="labels"></div>
-<div class="brand paper"><div class="lang" role="group" aria-label="Язык / Мова"><button data-l="ru" aria-pressed="true">Рус</button><button data-l="be" aria-pressed="false">Бел</button></div><h1 id="title">Воды <b>Беларуси</b></h1><p id="hint">Вращайте макет. Нажмите на булавку, затем на название.</p></div>
+<div class="brand paper"><div class="lang" role="group" aria-label="Мова / Язык"><button data-l="be" aria-pressed="true">Бел</button><button data-l="ru" aria-pressed="false">Рус</button></div><h1 id="title">Воды <b>Беларусі</b></h1><p id="hint">Вращайте макет. Нажмите на булавку, затем на название.</p></div>
 <nav class="list paper collapsed" id="list" aria-label="Реки и озёра"><button class="ltog" id="listToggle" aria-expanded="false" aria-controls="listBody"><i class="ic"></i><span id="listLabel">Реки и озёра</span><i class="chev"></i></button><div id="listBody"></div></nav>
 <div class="credit" id="credit">Высоты увеличены в 40 раз · Данные: <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap</a>, рельеф: Mapzen / AWS Terrain Tiles</div>
 <div class="tools"><button class="paper" id="refill">Наполнить</button><button class="paper" id="home">Весь макет</button></div>
@@ -122,7 +122,7 @@ const AUTO=/*AUTO*/;
 for(const a of AUTO)if(!CARDS[a.id]){const b=a.book||null;
   CARDS[a.id]={type:"river",minor:true,auto:true,be:a.be||a.ru,ru:a.ru,mouth:a.mouth,mouthBe:a.mouth_be||a.mouth,book:!!b,
     km:b?b.km:a.km,kin:a.kin,basin:b&&b.basin,q:b&&b.q,side:b&&b.side,stats:[],from:["",""],to:["",""],name:"",facts:[]}}
-let LANG="ru";try{if(localStorage.getItem("lang")==="be")LANG="be"}catch(e){}
+let LANG="be";try{if(localStorage.getItem("lang")==="ru")LANG="ru"}catch(e){}   // Belarusian unless the viewer chose Russian before
 const TX={
  ru:{credit:"Высоты увеличены в 40 раз · Данные: <a href=\"https://www.openstreetmap.org/copyright\" target=\"_blank\" rel=\"noopener\">© OpenStreetMap</a>, рельеф: Mapzen / AWS Terrain Tiles",doc:"Воды Беларуси",title:"Воды <b>Беларуси</b>",hint:"Вращайте макет. Нажмите на булавку, затем на название.",refill:"Наполнить",home:"Весь макет",
   search:"Найти реку или озеро",searchAria:"Поиск по названию",list:"Реки и озёра",canvas:"Гранёный макет Беларуси с реками и озёрами",
