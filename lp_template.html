@@ -236,7 +236,188 @@ const sky=new THREE.Mesh(new THREE.SphereGeometry(900,32,16),new THREE.ShaderMat
 scene.add(sky);
 
 // ---------------------------------------------------------------- terrain
-const P=L.pts,NP=P.length/3;
+const davyd={x:-7.495,z:26.325,ru:"Давид-Городок",be:"Давыд-Гарадок"};
+const horyn=L.rivers["Горынь"],vetlitsa=L.rivers["Ветлица"],lva=L.rivers["Льва"];
+// The source line joins disjoint reaches with a straight artificial connector.
+const joinedHoryn=horyn.lines[0];
+const oldHoryn=[
+  [-7.94,26.78,14.93,.519],[-7.88,26.72,15.02,.519],
+  [-7.83,26.66,15.12,.519],[-7.77,26.59,15.24,.519],
+  [-7.70,26.55,15.34,.519],
+  ...joinedHoryn.filter(p=>p[2]>=15.41&&p[2]<=16.03),
+  [-7.39,26.02,16.09,.519],
+];
+// The last source points double back at the mouth. End at the
+// Pripyat centerline and let the receiving surface cover the join.
+const mainHoryn=joinedHoryn.filter(p=>p[2]<=13.28).map(([x,z,d,y])=>{
+  const bend=1-THREE.MathUtils.smoothstep(Math.abs(d-10.96),.22,.76);
+  const mouth=THREE.MathUtils.smoothstep(d,12.73,13.19);
+  return [x-.075*bend,z,d,y-.041*mouth];
+});
+horyn.lines=[mainHoryn,oldHoryn,...horyn.lines.slice(1)];
+const hill={x:-7.383,z:26.243,rx:.108,rz:.103};
+function castleHill(x,z){
+  const slope=Math.hypot((x-hill.x)/hill.rx,(z-hill.z)/hill.rz);
+  return 1-THREE.MathUtils.smoothstep(slope,.32,1);
+}
+const townInfluence=(x,z)=>1-THREE.MathUtils.smoothstep(Math.hypot((x+7.74)/1.02,(z-26.29)/1.00),.78,1);
+
+const lowerHoryn=d=>THREE.MathUtils.smoothstep(d,2.7,4.5);
+
+function riverHalfWidth(r,p){
+  const broad=r.w*(.45+.55*Math.min(1,p[2]/r.D))*.3;
+  if(r===vetlitsa)return broad*.16;
+  if(r===lva)return broad*.38;
+  if(r!==horyn)return broad;
+  if(p[2]>14)return .027*THREE.MathUtils.smoothstep(p[2],14.93,15.38);
+  // Vary width along the river instead of at the edge of the town terrain.
+  const widerReaches=THREE.MathUtils.smoothstep(Math.abs(p[2]-10.9),.30,2.0);
+  const width=THREE.MathUtils.lerp(.072,.092,widerReaches);
+  return THREE.MathUtils.lerp(broad,width,lowerHoryn(p[2]));
+}
+function riverRows(r,line){
+  return line.filter((p,i)=>{
+    if(i%2===0||i===line.length-1)return true;
+    if(r!==horyn||lowerHoryn(p[2])===0)return false;
+    const a=line[i-1],b=line[i+1],dx=b[0]-a[0],dz=b[1]-a[1];
+    return Math.abs((p[0]-a[0])*dz-(p[1]-a[1])*dx)>.016*Math.hypot(dx,dz);
+  });
+}
+function riverSegments(r,lines=r.lines){
+  return lines.flatMap(line=>{
+    const rows=riverRows(r,line);
+    return rows.slice(1).flatMap((b,i)=>{
+      const a=rows[i],dx=b[0]-a[0],dz=b[1]-a[1],length=dx*dx+dz*dz;
+      if(!length)return [];
+      return [{a,b,dx,dz,length,fromWidth:riverHalfWidth(r,a),toWidth:riverHalfWidth(r,b)}];
+    });
+  });
+}
+const townSegments=riverSegments(horyn,[mainHoryn,oldHoryn])
+  .filter(({a,b})=>Math.hypot((a[0]+b[0])/2+7.74,(a[1]+b[1])/2-26.29)<1.35);
+const lowerHorynSegments=riverSegments(horyn).filter(({b})=>b[2]>2.7&&b[2]<14);
+const vetlitsaSegments=riverSegments(vetlitsa),lvaSegments=riverSegments(lva);
+
+function nearestSegment(segments,x,z){
+  let distance=Infinity,segment,fraction;
+  for(const candidate of segments){
+    const {a,dx,dz,length}=candidate;
+    const t=THREE.MathUtils.clamp(((x-a[0])*dx+(z-a[1])*dz)/length,0,1);
+    const d=(x-a[0]-dx*t)**2+(z-a[1]-dz*t)**2;
+    if(d<distance){distance=d;segment=candidate;fraction=t}
+  }
+  return {
+    distance:Math.sqrt(distance),
+    halfWidth:THREE.MathUtils.lerp(segment.fromWidth,segment.toWidth,fraction),
+    level:THREE.MathUtils.lerp(segment.a[3],segment.b[3],fraction),
+    chainage:THREE.MathUtils.lerp(segment.a[2],segment.b[2],fraction),
+  };
+}
+
+function townGround(x,z,original,influence,channel){
+  const bank=THREE.MathUtils.smoothstep(channel.distance,channel.halfWidth*.78,channel.halfWidth+.039);
+  const terrace=1-THREE.MathUtils.smoothstep(Math.hypot((x+7.674)/.134,(z-26.328)/.136),.23,1);
+  const localY=.497+bank*(.066+.089*castleHill(x,z)+.030*terrace+.004*(hash(x,z)-.5));
+  return THREE.MathUtils.lerp(original,localY,influence);
+}
+
+function channelGround(channel,original,reach){
+  const {distance,halfWidth,level}=channel;
+  const bank=THREE.MathUtils.smoothstep(distance,halfWidth*.78,halfWidth+.043);
+  const influence=reach*(1-THREE.MathUtils.smoothstep(distance,.14,.36));
+  return THREE.MathUtils.lerp(original,level-.026+bank*.071,influence);
+}
+
+const P=L.pts,M=L.m;
+for(let i=0;i<P.length;i+=3){
+  const x=P[i],z=P[i+2];
+  let y=P[i+1];
+  if(x>-11.95&&x< -6.42&&z>24.55&&z<30.13){
+    const channel=nearestSegment(lowerHorynSegments,x,z);
+    y=channelGround(channel,y,lowerHoryn(channel.chainage));
+  }
+  const influence=townInfluence(x,z);
+  if(influence)y=townGround(x,z,y,influence,nearestSegment(townSegments,x,z));
+  else if(x>-9.68&&x< -8.17&&z>24.61&&z<27.3)
+    y=channelGround(nearestSegment(vetlitsaSegments,x,z),y,1);
+  else if(x>-10.12&&x< -6.01&&z>26.71&&z<32.56)
+    y=channelGround(nearestSegment(lvaSegments,x,z),y,1);
+  P[i+1]=y;
+}
+// Refine the shorelines and hill. Leave the surrounding floodplain on the
+// original mesh so the town has no circular patch of high-density facets.
+for(const step of [.062,.117]){
+  for(let row=0;row*step<2.06;row++)for(let col=0;col*step<2.11;col++){
+    const x=-8.81+(col+(hash(col,row,step)-.5)*.84)*step;
+    const z=25.28+(row+(hash(row,col,step*2)-.5)*.84)*step;
+    const influence=townInfluence(x,z);
+    if(influence<.10)continue;
+    const channel=nearestSegment(townSegments,x,z);
+    const shore=Math.max(0,channel.distance-channel.halfWidth);
+    const landmark=Math.hypot(x+7.67,z-26.34)*.77;
+    const detail=Math.min(shore,landmark);
+    const spacing=detail<.073?.062:detail<.146?.117:0;
+    if(spacing!==step)continue;
+    P.push(x,townGround(x,z,.563,influence,channel),z);
+    M.push(135);
+  }
+}
+// Sample the rounded summit and its shoulders evenly without a separate mesh.
+for(const [radius,count] of [[0,1],[.34,7],[.70,9],[1,10]]){
+  for(let i=0;i<count;i++){
+    const angle=(i+radius*.5)*Math.PI*2/count;
+    const x=hill.x+Math.cos(angle)*hill.rx*radius,z=hill.z+Math.sin(angle)*hill.rz*radius;
+    P.push(x,townGround(x,z,.563,townInfluence(x,z),nearestSegment(townSegments,x,z)),z);
+    M.push(135);
+  }
+}
+// Space the bank samples along each course so very short source segments
+// don't create a band of tiny triangles in the terrain.
+const oldHorynSegments=riverSegments(horyn,[oldHoryn]);
+for(const [segments,spacing] of [[lowerHorynSegments,.074],[oldHorynSegments,.076],[vetlitsaSegments,.091],[lvaSegments,.119]]){
+  let next=0;
+  for(const {a,b,dx,dz,length,fromWidth,toWidth} of segments){
+    const span=Math.sqrt(length);
+    for(;next<span;next+=spacing){
+      const t=next/span,cx=a[0]+dx*t,cz=a[1]+dz*t;
+      const halfWidth=THREE.MathUtils.lerp(fromWidth,toWidth,t);
+      const level=THREE.MathUtils.lerp(a[3],b[3],t);
+      const reach=segments===lowerHorynSegments?lowerHoryn(THREE.MathUtils.lerp(a[2],b[2],t)):1;
+      if(reach<.30)continue;
+      for(const side of [0,-1.45,1.45]){
+        const offset=side*halfWidth,x=cx-dz/span*offset,z=cz+dx/span*offset;
+        const influence=segments===lowerHorynSegments||segments===oldHorynSegments?townInfluence(x,z):0;
+        const channel=nearestSegment(influence?townSegments:segments,x,z);
+        const y=influence?townGround(x,z,.563,influence,channel):channelGround(channel,level+.045,reach);
+        P.push(x,y,z);
+        M.push(135);
+      }
+    }
+    next-=span;
+  }
+}
+// Keep coarse terrain facets below the water in the middle of the lower reach.
+for(let i=0;i<P.length;i+=3){
+  const x=P[i],z=P[i+2];
+  if(x< -11.95||x> -6.42||z<24.55||z>30.13)continue;
+  const channel=nearestSegment(lowerHorynSegments,x,z);
+  if(channel.chainage>=4.5&&channel.distance<channel.halfWidth*.86)
+    P[i+1]=Math.min(P[i+1],channel.level-.022);
+}
+// Anchor the channel bed at the sharper bends near the Pripyat junction.
+const mouthRows=riverRows(horyn,mainHoryn);
+for(let i=1;i<mouthRows.length-1;i++){
+  const point=mouthRows[i],[x,z,d,level]=point;
+  if(d<11.45)continue;
+  const a=mouthRows[i-1],b=mouthRows[i+1],dx=b[0]-a[0],dz=b[1]-a[1],span=Math.hypot(dx,dz);
+  const halfWidth=riverHalfWidth(horyn,point);
+  for(const side of [0,-.42,.42]){
+    const offset=side*halfWidth/span;
+    P.push(x-dz*offset,level-.022,z+dx*offset);
+    M.push(135);
+  }
+}
+const NP=P.length/3;
 // the terrain triangles are built here rather than shipped: Delaunay over the points, keeping triangles inside the border with no long edges
 const TRI=L.tri||(()=>{const xy=new Float64Array(NP*2);for(let i=0;i<NP;i++){xy[i*2]=P[i*3];xy[i*2+1]=P[i*3+2]}
   const t=new Delaunator(xy).triangles,B=L.border,cs=.2;let x0=1e9,z0=1e9,x1=-1e9,z1=-1e9;for(const [x,z] of B){x0=Math.min(x0,x);z0=Math.min(z0,z);x1=Math.max(x1,x);z1=Math.max(z1,z)}
@@ -254,7 +435,7 @@ const terrainGeo=(()=>{const pos=new Float32Array(TRI.length*3);for(let k=0;k<TR
 const triM=k=>(L.m[TRI[k*3]]+L.m[TRI[k*3+1]]+L.m[TRI[k*3+2]])/3;
 // nearest river check (for colours and placement)
 const rcell=2,rhash=new Map();
-for(const [n,r] of Object.entries(L.rivers))for(const l of r.lines)for(const p of l){const k=Math.floor(p[0]/rcell)+","+Math.floor(p[1]/rcell);(rhash.get(k)||rhash.set(k,[]).get(k)).push([p[0],p[1],r.w*(.45+.55*Math.min(1,p[2]/r.D))*.3,p[3]])}
+for(const [n,r] of Object.entries(L.rivers))for(const l of r.lines)for(const p of l){const k=Math.floor(p[0]/rcell)+","+Math.floor(p[1]/rcell);(rhash.get(k)||rhash.set(k,[]).get(k)).push([p[0],p[1],riverHalfWidth(r,p),p[3]])}
 function riverNear(x,z){let best=1e9,bp=null;const ci=Math.floor(x/rcell),cj=Math.floor(z/rcell);for(let a=-1;a<=1;a++)for(let b=-1;b<=1;b++){const Ls=rhash.get((ci+a)+","+(cj+b));if(Ls)for(const p of Ls){const d=(p[0]-x)**2+(p[1]-z)**2;if(d<best){best=d;bp=p}}}return bp?{d:Math.sqrt(best),hw:bp[2],y:bp[3]}:{d:99,hw:0,y:0}}
 const lakeRings=Object.entries(L.lakes).map(([n,lk])=>({n,lk}));
 function paintLand(c,n,k){
@@ -274,7 +455,9 @@ function paintLand(c,n,k){
       const farm=vn(c.x*.12+3,c.z*.12)>.38;
       name=!farm?(m>215?"upland":(hash(key,4)<.6?"meadow":"grass")):h<.24?"wheat":h<.42?"field2":h<.5?"plough":h<.78?"grass":h<.9?"meadow":"sand";
     }}
-  return tone(PAL[name],key,1)}
+  const color=tone(PAL[name],key,1),slope=castleHill(c.x,c.z);
+  if(slope>0)color.lerp(tone(PAL.meadow,key,.36),slope*.61);
+  return color}
 const terrain=meshOf(facet(terrainGeo,paintLand),faceted());scene.add(terrain);
 // terrain height lookup through the real triangles
 const tcell=1.5,tgrid=new Map();
@@ -305,34 +488,42 @@ function heightAt(x,z){const Ls=tgrid.get(Math.floor(x/tcell)+","+Math.floor(z/t
 
 // ---------------------------------------------------------------- water: rivers unfold from the source, then keep flashing downstream
 const items={},clickables=[];
-const waterBody=`float fu=clamp((uTime-(uT0+aEx.x/uSpeed))/0.42,0.,1.);
+const waterBody=(amplitude=".025")=>`float fu=clamp((uTime-(uT0+aEx.x/uSpeed))/0.42,0.,1.);
   float fo=1.-pow(1.-fu,3.)+.25*sin(fu*3.14159)*fu;
   transformed=aEx.yzw+(transformed-aEx.yzw)*fo;
   transformed.xz-=aOff*(1.-uWidth);
-  transformed.y+=sin(aCen.x*1.7+uTime*1.3)*cos(aCen.z*1.4-uTime*1.1)*.025*fu;`;
+  transformed.y+=sin(aCen.x*1.7+uTime*1.3)*cos(aCen.z*1.4-uTime*1.1)*${amplitude}*fu;`;
 const waterTint=`float fl=fract(aEx.x*.22-uTime*.75+fract(aCen.x*37.+aCen.z*17.)*.35);
   vColor.rgb=mix(vColor.rgb,vec3(.86,.97,.96),.55*smoothstep(.72,.86,fl)*smoothstep(1.,.86,fl));
   float gw=.5+.5*sin(aEx.x*1.1-uTime*4.);vColor.rgb=mix(vColor.rgb,vec3(.2,.64,1.35)*(1.2+.6*gw),uSel*.95);`;
 let minorK=0;
 for(const [name,r] of Object.entries(L.rivers)){
-  const tris=[],exTri=[],minor=!!(CARDS[name]&&CARDS[name].minor),auto=!!(CARDS[name]&&CARDS[name].auto);
+  const tris=[],exTri=[],oldChannelFaces=[],minor=!!(CARDS[name]&&CARDS[name].minor),auto=!!(CARDS[name]&&CARDS[name].auto);
   const uni={uT0:{value:reduce?-99:(auto?3.4+(minorK++)*.012:minor?2.2+(minorK++)*.09:.6)},uSpeed:{value:minor?24:34},uSel:{value:0}};
   for(const line of r.lines){
-    const rows=line.filter((_,i)=>i%2===0||i===line.length-1);
+    const rows=riverRows(r,line);
     const at=(i,k)=>{const p=rows[i],p0=rows[Math.max(0,i-1)],p1=rows[Math.min(rows.length-1,i+1)];let tx=p1[0]-p0[0],tz=p1[1]-p0[1];const Lx=Math.hypot(tx,tz)||1;tx/=Lx;tz/=Lx;
-      const hw=r.w*(.45+.55*Math.min(1,p[2]/r.D))*.3+.06,inner=k===1||k===2,jj=inner?(hash(i,k)-.5)*.14:0,off=[-1,-.36,.36,1][k]*hw;
-      return [p[0]-tz*off+tx*jj,p[3]+(inner?(hash(i,k+5)-.5)*.03:0),p[1]+tx*off+tz*jj,p[2],-tz*off,tx*off]};
+      const detail=r===vetlitsa||r===lva?1:r===horyn?lowerHoryn(p[2]):0;
+      const hw=riverHalfWidth(r,p)+.06*(1-detail),inner=k===1||k===2;
+      const jitter=THREE.MathUtils.lerp(.14,.009,detail)*Math.min(1,hw/.025);
+      const jj=inner?(hash(i,k)-.5)*jitter:0,off=[-1,-.36,.36,1][k]*hw;
+      return [p[0]-tz*off+tx*jj,p[3]+(inner?(hash(i,k+5)-.5)*THREE.MathUtils.lerp(.03,.004,detail):0),p[1]+tx*off+tz*jj,p[2],-tz*off,tx*off]};
     for(let i=0;i+1<rows.length;i++)for(let k=0;k<3;k++){
       const a=at(i,k),b=at(i,k+1),c=at(i+1,k),d=at(i+1,k+1);
       const quad=(i+k)%2?[[a,b,c],[b,d,c]]:[[a,b,d],[a,d,c]];
       for(const t of quad){const up=(t[1][2]-t[0][2])*(t[2][0]-t[0][0])-(t[1][0]-t[0][0])*(t[2][2]-t[0][2]);const tt=up<0?[t[0],t[2],t[1]]:t;
         // pivot = most upstream corner; born at the triangle's mean distance
         const piv=tt.reduce((m,v)=>v[3]<m[3]?v:m,tt[0]),dm=(tt[0][3]+tt[1][3]+tt[2][3])/3+hash(i,k)*.6;
-        for(const v of tt)tris.push(v[0],v[1],v[2]);exTri.push(tt.map(v=>[dm,piv[0],piv[1],piv[2],v[4],v[5]]))}}
+        for(const v of tt)tris.push(v[0],v[1],v[2]);
+        exTri.push(tt.map(v=>[dm,piv[0],piv[1],piv[2],v[4],v[5]]));
+        oldChannelFaces.push(line===oldHoryn)}}
   }
   const g=new THREE.BufferGeometry();g.setAttribute("position",new THREE.Float32BufferAttribute(tris,3));
-  const fg=facet(g,c=>tone(PAL.river,c.x*5.3+c.z*9.1,1.3),(m,n,ti)=>exTri[ti]);
-  const mat=faceted({roughness:.32,uniforms:Object.assign({uWidth:riverWidth},uni),head:"attribute vec4 aEx;attribute vec2 aOff;uniform float uT0,uSpeed,uSel,uWidth;\n",body:waterBody,tint:waterTint});
+  const fg=facet(g,(c,n,i)=>{
+    const oldChannel=oldChannelFaces[i]&&townInfluence(c.x,c.z)>.35;
+    return tone(oldChannel?"#3793a0":PAL.river,c.x*5.3+c.z*9.1,oldChannel?.73:1.3);
+  },(m,n,ti)=>exTri[ti]);
+  const mat=faceted({roughness:.32,uniforms:Object.assign({uWidth:riverWidth},uni),head:"attribute vec4 aEx;attribute vec2 aOff;uniform float uT0,uSpeed,uSel,uWidth;\n",body:waterBody(r===horyn?".007":r===vetlitsa||r===lva?".003":undefined),tint:waterTint});
   const m=meshOf(fg,mat,{cast:false});m.userData.name=name;scene.add(m);clickables.push(m);
   const main=r.lines.reduce((a,b)=>a.length>b.length?a:b);const mid=main[Math.floor(main.length*.5)];
   items[name]={type:"river",uni,mid:new THREE.Vector3(mid[0],mid[3],mid[1]),len:r.D,main,minor,auto};
@@ -347,7 +538,7 @@ for(const [name,lk] of Object.entries(L.lakes)){
   const fg=facet(g,c=>{const r=Math.hypot(c.x-cx,c.z-cz);return tone(r<.6?PAL.lakeDeep:PAL.lake,c.x*3.1+c.z*7.7,1.2)},(m,n,ti)=>exTri[ti]);
   const minor=!!(CARDS[name]&&CARDS[name].minor);
   const uni={uT0:{value:reduce?-99:(minor?3:1.2)},uSpeed:{value:6},uSel:{value:0}};
-  const mat=faceted({roughness:.3,uniforms:Object.assign({uWidth:riverWidth},uni),head:"attribute vec4 aEx;attribute vec2 aOff;uniform float uT0,uSpeed,uSel,uWidth;\n",body:waterBody,
+  const mat=faceted({roughness:.3,uniforms:Object.assign({uWidth:riverWidth},uni),head:"attribute vec4 aEx;attribute vec2 aOff;uniform float uT0,uSpeed,uSel,uWidth;\n",body:waterBody(),
     tint:`float fl=fract((aCen.x*.9-aCen.z*.5)*.9+uTime*.6+fract(aCen.x*37.+aCen.z*17.)*.4);vColor.rgb=mix(vColor.rgb,vec3(.86,.97,.96),.45*smoothstep(.75,.88,fl)*smoothstep(1.,.88,fl));float gw=.5+.5*sin((aCen.x+aCen.z)*1.3-uTime*3.);vColor.rgb=mix(vColor.rgb,vec3(.2,.64,1.35)*(1.2+.6*gw),uSel*.95);`});
   const m=meshOf(fg,mat,{cast:false});m.userData.name=name;scene.add(m);clickables.push(m);
   items[name]={type:"lake",uni,mid:new THREE.Vector3(cx,lk.level,cz),len:6,minor,auto:!!(CARDS[name]&&CARDS[name].small)};   // small lakes: pins only close up
@@ -401,7 +592,8 @@ for(const lk of Object.values(L.lakes)){const Q=lk.pts,T=lk.tri;
   for(let k=0;k<T.length;k+=3){let x0=1e9,x1=-1e9,z0=1e9,z1=-1e9;for(let v=0;v<3;v++){const i=T[k+v]*2;x0=Math.min(x0,Q[i]);x1=Math.max(x1,Q[i]);z0=Math.min(z0,Q[i+1]);z1=Math.max(z1,Q[i+1])}
     for(let a=Math.floor(x0/LCELL)-1;a<=Math.floor(x1/LCELL)+1;a++)for(let b=Math.floor(z0/LCELL)-1;b<=Math.floor(z1/LCELL)+1;b++)lakeMask.add(a*100003+b)}}
 const inLake=(x,z)=>lakeMask.has(Math.floor(x/LCELL)*100003+Math.floor(z/LCELL));
-const nearCity=(x,z)=>L.cities.some(([n,cx,cz,r])=>Math.hypot(x-cx,z-cz)<(n==="Минск"?2.6:r===1?1.9:r===4?.8:1.3));
+const districtHouseScale=.42;
+const nearCity=(x,z)=>Math.hypot(x-davyd.x,z-davyd.z)<.39||L.cities.some(([n,cx,cz,r])=>Math.hypot(x-cx,z-cz)<(n==="Минск"?2.6:r===1?1.9:r===4?.8:1.3));
 {
   const B=L.border;let x0=1e9,x1=-1e9,z0=1e9,z1=-1e9;for(const [x,z] of B){x0=Math.min(x0,x);x1=Math.max(x1,x);z0=Math.min(z0,z);z1=Math.max(z1,z)}
   const MAXT=mobile?5200:10000;let n=0;
@@ -417,7 +609,93 @@ const nearCity=(x,z)=>L.cities.some(([n,cx,cz,r])=>Math.hypot(x-cx,z-cz)<(n==="�
   for(const [nm,cx,cz,r] of L.cities){const count=nm==="Минск"?60:r===1?28:r===2?13:r===3?6:4,spread=nm==="Минск"?2.4:r===1?1.7:r===2?1.15:r===3?.75:.5;
     for(let k=0,tries=0;k<count&&tries<count*40;tries++){   /* towns on rivers: look a little further out until the houses fit */const grow=1+tries/(count*8),a=rnd()*6.283,rr=Math.sqrt(rnd())*spread*Math.min(grow,2.2),x=cx+Math.cos(a)*rr,z=cz+Math.sin(a)*rr;const rv=riverNear(x,z);if(rv.d<rv.hw+(r>2?.3:.45)||inLake(x,z))continue;const y=heightAt(x,z);if(y==null)continue;k++;
       const kind=(r===1&&rr<spread*.3&&rnd()<.45)?"tower":["house","house2","house3"][Math.floor(rnd()*3)];
-      place[kind].push([x,y-.02,z,kind==="tower"?(.7+rnd()*(nm==="Минск"?1.2:.6)):(r===4?.42+rnd()*.12:r===3?.6+rnd()*.2:.8+rnd()*.35),Math.round(rnd()*4)*Math.PI/2+(rnd()-.5)*.3,0])}}
+      place[kind].push([x,y-.02,z,kind==="tower"?(.7+rnd()*(nm==="Минск"?1.2:.6)):(r===4?districtHouseScale+rnd()*.12:r===3?.6+rnd()*.2:.8+rnd()*.35),Math.round(rnd()*4)*Math.PI/2+(rnd()-.5)*.3,0])}}
+}
+{
+  const {x,z}=davyd,angle=.36;
+  const bridge=new THREE.Group();
+  bridge.position.set(x,.571,z);
+  bridge.rotation.y=-angle;
+  const bridgeParts=[
+    [.150,.014,.026,0,0,0,"#918575"],
+    [.148,.009,.003,0,.010,-.014,"#ded3ba"],
+    [.148,.009,.003,0,.010,.014,"#ded3ba"],
+    [.009,.049,.022,-.023,-.027,0,"#a3937e"],
+    [.009,.049,.022,.023,-.027,0,"#a3937e"],
+  ];
+  for(const [w,h,d,px,y,pz,color] of bridgeParts){
+    const part=meshOf(facet(new THREE.BoxGeometry(w,h,d),()=>new THREE.Color(color)),faceted());
+    part.position.set(px,y,pz);
+    bridge.add(part);
+  }
+  const ramps=[];
+  const cos=Math.cos(angle),sin=Math.sin(angle);
+  for(const side of [-1,1]){
+    const near=.072*side,far=.112*side;
+    const edge=(along,across)=>[x+along*cos-across*sin,z+along*sin+across*cos];
+    const top=[-.013,.013].map(across=>{
+      const [px,pz]=edge(near,across);
+      return [px,.578,pz];
+    });
+    const ground=[-.014,.014].map(across=>{
+      const [px,pz]=edge(far,across);
+      return [px,Math.max(heightAt(px,pz)+.003,.567),pz];
+    });
+    const [a,b,c,d]=side>0?[...top,...ground]:[...ground,...top];
+    ramps.push(...a,...b,...c,...b,...d,...c);
+  }
+  const approaches=new THREE.BufferGeometry();
+  approaches.setAttribute("position",new THREE.Float32BufferAttribute(ramps,3));
+  scene.add(meshOf(facet(approaches,()=>new THREE.Color("#a79a85")),faceted(),{cast:false}));
+  scene.add(bridge);
+
+  const plaza=new THREE.Group();
+  plaza.position.set(x+.144,.565,z+.052);
+  plaza.rotation.y=-angle;
+  scene.add(plaza);
+
+  const plazaMaterial=faceted();
+  const paving=new THREE.PlaneGeometry(.113,.085,9,7).rotateX(-Math.PI/2);
+  const paved=meshOf(facet(paving,c=>tone("#c4b29a",c.x*83+c.z*131,.60)),plazaMaterial,{cast:false});
+  paved.position.y=.002;
+  plaza.add(paved);
+
+  const monument=new THREE.Group();
+  monument.position.set(.013,.002,-.006);
+  monument.rotation.y=-.42;
+  plaza.add(monument);
+  const limestone="#a49681",bronze="#43554c";
+  const sculpture=[
+    [new THREE.BoxGeometry(.027,.003,.024),0,.0015,0,"#d6c5ab"],
+    [new THREE.BoxGeometry(.022,.005,.019),0,.0055,0,limestone],
+    [new THREE.BoxGeometry(.015,.013,.013),0,.0145,0,limestone],
+    [new THREE.BoxGeometry(.020,.003,.016),0,.0225,0,"#bcac92"],
+    [new THREE.BoxGeometry(.0038,.013,.0042),-.0031,.030,0,bronze],
+    [new THREE.BoxGeometry(.0038,.013,.0042),.0031,.030,.0013,bronze],
+    [new THREE.CylinderGeometry(.006,.008,.020,5),0,.042,-.001,bronze,.06],
+    [new THREE.ConeGeometry(.008,.018,4),-.002,.039,-.004,"#4d6052",-.12],
+    [new THREE.IcosahedronGeometry(.0045,0),0,.056,0,bronze],
+    [new THREE.CylinderGeometry(.0018,.0021,.013,5),.0082,.046,.002,bronze,-1.15],
+    [new THREE.CylinderGeometry(.0012,.0012,.030,5),.014,.046,.006,"#80705a",-.23],
+    [new THREE.ConeGeometry(.0027,.006,4),.018,.062,.006,"#a79573",-.23],
+  ];
+  for(const [geometry,px,y,pz,color,tilt=0] of sculpture){
+    const part=meshOf(facet(geometry,()=>new THREE.Color(color)),plazaMaterial);
+    part.position.set(px,y,pz);
+    part.rotation.z=tilt;
+    monument.add(part);
+  }
+
+  const roofs=["house","house2","house3"];
+  const homes=[[.36,-.24],[.57,.02],[.43,.34],[-.54,.07]];
+  homes.forEach(([dx,dz],i)=>{
+    const px=x+dx,pz=z+dz,scale=districtHouseScale+hash(i,9)*.12;
+    place[roofs[i%3]].push([px,heightAt(px,pz)-.01,pz,scale,(i-.8)*.27,0]);
+  });
+  for(const [dx,dz,scale] of [[.043,-.093,.032],[.143,-.119,.036],[-.103,-.108,.033],[-.166,.146,.034],[.249,.112,.031]]){
+    const px=x+dx,pz=z+dz,ground=heightAt(px,pz);
+    if(ground>=.552)place.tree.push([px,ground-.002,pz,scale,hash(px,pz)*6.28,0]);
+  }
 }
 // two bison grazing in a glade of Belovezhskaya Pushcha: a cow and her reddish calf
 function bison(fur,mane){const M=c=>new THREE.MeshStandardMaterial({color:c,flatShading:true,roughness:.95}),mf=M(fur),mm=M(mane),ml=M("#2e2219"),mh=M("#e6dcc4"),mn=M("#2a201a");
@@ -444,7 +722,7 @@ function updateHerd(T){const t=reduce?0:T,a=t*.035;
     h.b.position.set(x,(heightAt(x,z)??1)-.01,z);h.b.rotation.y=-ang-Math.PI/2+.4*Math.sin(t*.07+h.ph);
     const c=(t*.25+h.ph)%6;h.b.userData.head.rotation.z=c<4.6?-.75+.08*Math.sin(t*3+h.ph):-.75+.7*Math.sin((c-4.6)/1.4*Math.PI)}}   // mostly head down, now and then a look around
 const propMat=faceted(),born={};
-for(const k of Object.keys(kinds)){const list=place[k];if(!list.length)continue;const m=new THREE.InstancedMesh(kinds[k],propMat,list.length);m.castShadow=true;m.receiveShadow=true;
+for(const [k,list] of Object.entries(place)){if(!list.length)continue;const m=new THREE.InstancedMesh(kinds[k],propMat,list.length);m.castShadow=true;m.receiveShadow=true;
   const o=new THREE.Object3D(),c=new THREE.Color();
   list.forEach(([x,y,z,s,rot,lean],i)=>{o.position.set(x,y,z);o.rotation.set(lean,rot,lean*.7);if(k==="tower")o.scale.set(1,s,1);else o.scale.setScalar(s);o.updateMatrix();m.setMatrixAt(i,o.matrix);m.setColorAt(i,c.setScalar(.9+.2*hash(x,z)))});
   scene.add(m)}
@@ -510,7 +788,15 @@ function closeBubble(){bubbleFor=null;bubble.hidden=true;highlight(selected)}
 bubble.onclick=()=>{if(bubbleFor)select(bubbleFor,true)};
 // ---------------------------------------------------------------- city labels
 const labelsEl=document.getElementById("labels"),labels=[];
-for(const [n,x,z,r,be] of L.cities){const el=document.createElement("div");el.className="city"+(r===2?" small":r===3?" tiny":r===4?" micro":"");el.textContent=LANG==="be"?(be||CITY_BE[n]||n):n;labelsEl.appendChild(el);labels.push({el,r,n,be,pos:new THREE.Vector3(x,(heightAt(x,z)??1)+(r===1?1.6:1.1),z)})}
+const cityLabels=[...L.cities,[davyd.ru,davyd.x+.18,davyd.z,4,davyd.be]];
+for(const [n,x,z,r,be] of cityLabels){
+  const el=document.createElement("div");
+  el.className="city"+(r===2?" small":r===3?" tiny":r===4?" micro":"");
+  el.textContent=LANG==="be"?(be||CITY_BE[n]||n):n;
+  labelsEl.appendChild(el);
+  const lift=n===davyd.ru?.59:r===1?1.6:1.1;
+  labels.push({el,r,n,be,pos:new THREE.Vector3(x,(heightAt(x,z)??1)+lift,z)});
+}
 let camD=150;
 const v3=new THREE.Vector3();
 function placeLabels(){const w=innerWidth,h=innerHeight;for(const l of labels){
@@ -629,7 +915,7 @@ function loop(now){
   camD=camera.position.distanceTo(controls.target);riverWidth.value=.3+.7*Math.min(1,Math.max(0,(130-camD)/110));   // thin rivers on the overview, full width close up
   const fs=Math.min(portrait?5:3.6,Math.max(.6,camD/38));
   for(const p of pins){const t=reduce?9:T-p.t0,a=spring(t,2.6,.38);const near=(p.auto?camD<38:(!p.minor||camD<70))||p.name===selected||p.name===bubbleFor;
-    p.m.visible=(reduce||t>0)&&near;const s=fs*(p.auto?.65:p.minor?.8:1)*(p.name===bubbleFor?1.25:1);p.m.scale.set(s,s*Math.max(.001,a),s)}
+    p.m.visible=(reduce||t>0)&&near;const s=fs*(p.name==="Ветлица"?.37:p.auto?.65:p.minor?.8:1)*(p.name===bubbleFor?1.25:1);p.m.scale.set(s,s*Math.max(.001,a),s)}
   updateArrows(T,camD);
   if(fly){const k=Math.min(1,(now-fly.t0)/fly.dur),e=k<.5?4*k*k*k:1-Math.pow(-2*k+2,3)/2;controls.target.lerpVectors(fly.fromT,fly.toT,e);camera.position.lerpVectors(fly.fromP,fly.toP,e);if(k>=1)fly=null}
   controls.target.x=Math.max(-48,Math.min(48,controls.target.x));controls.target.z=Math.max(-34,Math.min(34,controls.target.z));
