@@ -283,7 +283,7 @@ const waterBody=`float fu=clamp((uTime-(uT0+aEx.x/uSpeed))/0.42,0.,1.);
   transformed.y+=sin(aCen.x*1.7+uTime*1.3)*cos(aCen.z*1.4-uTime*1.1)*.025*fu;`;
 const waterTint=`float fl=fract(aEx.x*.22-uTime*.75+fract(aCen.x*37.+aCen.z*17.)*.35);
   vColor.rgb=mix(vColor.rgb,vec3(.86,.97,.96),.55*smoothstep(.72,.86,fl)*smoothstep(1.,.86,fl));
-  vColor.rgb=mix(vColor.rgb,vec3(.98,.55,.42),uSel*.55);`;
+  float gw=.5+.5*sin(aEx.x*1.1-uTime*4.);vColor.rgb=mix(vColor.rgb,vec3(.2,.64,1.35)*(1.2+.6*gw),uSel*.95);`;
 let minorK=0;
 for(const [name,r] of Object.entries(L.rivers)){
   const tris=[],exTri=[],minor=!!(CARDS[name]&&CARDS[name].minor),auto=!!(CARDS[name]&&CARDS[name].auto);
@@ -319,7 +319,7 @@ for(const [name,lk] of Object.entries(L.lakes)){
   const minor=!!(CARDS[name]&&CARDS[name].minor);
   const uni={uT0:{value:reduce?-99:(minor?3:1.2)},uSpeed:{value:6},uSel:{value:0}};
   const mat=faceted({roughness:.3,uniforms:uni,head:"attribute vec4 aEx;uniform float uT0,uSpeed,uSel;\n",body:waterBody,
-    tint:`float fl=fract((aCen.x*.9-aCen.z*.5)*.9+uTime*.6+fract(aCen.x*37.+aCen.z*17.)*.4);vColor.rgb=mix(vColor.rgb,vec3(.86,.97,.96),.45*smoothstep(.75,.88,fl)*smoothstep(1.,.88,fl));vColor.rgb=mix(vColor.rgb,vec3(.98,.55,.42),uSel*.55);`});
+    tint:`float fl=fract((aCen.x*.9-aCen.z*.5)*.9+uTime*.6+fract(aCen.x*37.+aCen.z*17.)*.4);vColor.rgb=mix(vColor.rgb,vec3(.86,.97,.96),.45*smoothstep(.75,.88,fl)*smoothstep(1.,.88,fl));float gw=.5+.5*sin((aCen.x+aCen.z)*1.3-uTime*3.);vColor.rgb=mix(vColor.rgb,vec3(.2,.64,1.35)*(1.2+.6*gw),uSel*.95);`});
   const m=meshOf(fg,mat,{cast:false});m.userData.name=name;scene.add(m);clickables.push(m);
   items[name]={type:"lake",uni,mid:new THREE.Vector3(cx,lk.level,cz),len:6,minor};
 }
@@ -468,8 +468,9 @@ for(const [name,it] of Object.entries(items)){
   const pin={m,name,minor:it.minor,auto:it.auto,t0:it.uni.uT0.value+(it.type==="river"?it.len*.45/it.uni.uSpeed.value:.6)+.15};pins.push(pin);it.pin=pin}
 const bubble=document.createElement("button");bubble.className="bubble";bubble.hidden=true;document.body.appendChild(bubble);
 let bubbleFor=null;
-function openBubble(n){bubbleFor=n;const it=items[n];bubble.innerHTML=`<span class="bk">${it.type==="lake"?tx("lakeL"):tx("riverL")}</span><span class="bn">${dname(n)}</span><span class="bm">${tx("more")}</span>`;bubble.hidden=false}
-function closeBubble(){bubbleFor=null;bubble.hidden=true}
+function highlight(n){for(const [k,it] of Object.entries(items))it.uni.uSel.value=k===n?1:0}
+function openBubble(n){if(selected&&selected!==n){selected=null;card.classList.add("hide");for(const b of Object.values(chips))b.setAttribute("aria-pressed","false")}highlight(n);bubbleFor=n;const it=items[n];bubble.innerHTML=`<span class="bk">${it.type==="lake"?tx("lakeL"):tx("riverL")}</span><span class="bn">${dname(n)}</span><span class="bm">${tx("more")}</span>`;bubble.hidden=false}
+function closeBubble(){bubbleFor=null;bubble.hidden=true;highlight(selected)}
 bubble.onclick=()=>{if(bubbleFor)select(bubbleFor,true)};
 // ---------------------------------------------------------------- city labels
 const labelsEl=document.getElementById("labels"),labels=[];
