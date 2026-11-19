@@ -11,7 +11,8 @@
   --f-display:"Oswald","Arial Narrow",system-ui,sans-serif; --f-body:"Nunito","Segoe UI",system-ui,sans-serif;
   color-scheme:light;
 }
-html,body{height:100%;margin:0;overflow:hidden}
+html,body{height:100%;margin:0;overflow:hidden;overscroll-behavior:none}
+.bubble,.brand,.tools,.scale,.credit{touch-action:none}
 body{background:#f8dcc0;color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.5}
 #c{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none;outline:none}
 .paper{background:var(--paper);border:1px solid rgba(255,255,255,.7);box-shadow:0 14px 30px -16px var(--shadow),0 2px 0 var(--paper2)}
@@ -1164,11 +1165,12 @@ function loop(now){
   for(const p of pins){const t=reduce?9:T-p.t0,a=spring(t,2.6,.38);const near=(p.auto?camD<38:(!p.minor||camD<70))||p.name===selected||p.name===bubbleFor;
     p.m.visible=(reduce||t>0)&&near;const s=fs*(p.auto?.65:p.minor?.8:1)*(p.name===bubbleFor?1.25:1);p.m.scale.set(s,s*Math.max(.001,a),s)}
   updateArrows(T,camD);
-  if(bubbleFor){const p=items[bubbleFor].pin;v3.copy(p.m.position);v3.y+=1.2*p.m.scale.x;v3.project(camera);
-    if(v3.z>1||!p.m.visible){bubble.style.visibility="hidden"}else{bubble.style.visibility="";bubble.style.transform=`translate(${(v3.x*.5+.5)*innerWidth}px,${(-v3.y*.5+.5)*innerHeight}px) translate(-50%,calc(-100% - 10px))`}}
   if(fly){const k=Math.min(1,(now-fly.t0)/fly.dur),e=k<.5?4*k*k*k:1-Math.pow(-2*k+2,3)/2;controls.target.lerpVectors(fly.fromT,fly.toT,e);camera.position.lerpVectors(fly.fromP,fly.toP,e);if(k>=1)fly=null}
   controls.target.x=Math.max(-48,Math.min(48,controls.target.x));controls.target.z=Math.max(-34,Math.min(34,controls.target.z));
-  controls.update();sky.position.copy(camera.position);renderer.render(scene,camera);placeLabels();requestAnimationFrame(loop)}
+  controls.update();camera.updateMatrixWorld();sky.position.copy(camera.position);renderer.render(scene,camera);placeLabels();
+  if(bubbleFor){const p=items[bubbleFor].pin;v3.copy(p.m.position);v3.y+=1.2*p.m.scale.x;v3.project(camera);
+    if(v3.z>1||!p.m.visible){bubble.style.visibility="hidden"}else{bubble.style.visibility="";bubble.style.transform=`translate(${(v3.x*.5+.5)*innerWidth}px,${(-v3.y*.5+.5)*innerHeight}px) translate(-50%,calc(-100% - 10px))`}}
+  requestAnimationFrame(loop)}
 requestAnimationFrame(loop);
 })();
 </script>
