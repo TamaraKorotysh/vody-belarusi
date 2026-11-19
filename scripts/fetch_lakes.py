@@ -5,7 +5,7 @@ root = os.path.dirname(os.path.dirname(os.path.abspath(__file__))); D = os.path.
 WANT = int(sys.argv[1]) if len(sys.argv) > 1 else 100
 book = json.load(open(os.path.join(D, "book_lakes.json"), encoding="utf8"))
 HAVE = {"Нарач", "Асвейскае", "Чырвонае", "Лукомскае", "Дрывяты", "Свір", "Снуды", "Выганашчанскае", "Мядзел", "Езярышча", "Рычы", "Рьічы", "Струста",
-        "Мястра", "Нешчарда", "Доўгае", "Рытаўна"}
+        "Мястра", "Нешчарда", "Доўгае", "Рытаўна", "Асвёйскае"}
 def clean(n):   # OCR marks stress with Ё/Ў: try the name as printed and without those marks
     n = n.replace(" Возера", "").strip(); return list(dict.fromkeys([n, n.replace("ё", "е").replace("Ё", "Е"), n.replace("ў", "у").replace("Ў", "У")]))
 def km2(gj):
@@ -17,12 +17,14 @@ def km2(gj):
     return a
 fn = os.path.join(D, "nom_lakes.json"); out = json.load(open(fn, encoding="utf8")) if os.path.exists(fn) else {}
 seen = set(); tried = 0
+REJECTED = {"Бярозаўскае", "Доугае", "Вялікае", "Бледнае", "Бёлае"}   # checked by check_lakes.py: outline of a namesake elsewhere
 for b in book:
     if len(out) >= WANT: break
     key = (b["area"], b["depth"])
     if key in seen or b["be"].replace(" Возера", "") in HAVE: continue
     seen.add(key)
     if any(v["book"]["area"] == b["area"] and v["book"]["depth"] == b["depth"] for v in out.values()): continue
+    if b["be"] in REJECTED: continue
     hit = None
     for name in clean(b["be"]):
         for q in (f"{name} возера", f"возера {name}"):
@@ -36,13 +38,14 @@ for b in book:
                 if gj.get("type") not in ("Polygon", "MultiPolygon"): continue
                 if r.get("category") not in ("natural", "water") and r.get("type") not in ("water", "lake"): continue
                 a = km2(gj)
+                if any(v["osm"] == f'{r["osm_type"]}/{r["osm_id"]}' for v in out.values()): continue
                 if b["area"] * .45 <= a <= b["area"] * 2.2: hit = (r, a); break
             if hit: break
         if hit: break
     if not hit: print("  not found:", b["be"], b["area"], flush=True); continue
     r, a = hit; nd = r.get("namedetails") or {}
     ru = nd.get("name:ru") or ""
-    out[b["be"]] = {"book": b, "name": r.get("name"), "ru": ru, "be": nd.get("name:be") or r.get("name"), "osm": f'{r["osm_type"]}/{r["osm_id"]}',
+    out[f'{b["be"]} {b["area"]}'] = {"book": b, "name": r.get("name"), "ru": ru, "be": nd.get("name:be") or r.get("name"), "osm": f'{r["osm_type"]}/{r["osm_id"]}',
                     "km2": round(a, 2), "geojson": r["geojson"]}
     json.dump(out, open(fn, "w", encoding="utf8"), ensure_ascii=False)
     print(len(out), b["be"], b["area"], "->", r.get("name"), "|", ru, round(a, 2), flush=True)

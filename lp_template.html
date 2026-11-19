@@ -607,7 +607,9 @@ document.getElementById("refill").onclick=()=>{if(reduce)return;let k=0;for(cons
 const ray=new THREE.Raycaster(),ndc=new THREE.Vector2();let down=null;
 canvas.addEventListener("pointerdown",e=>{down=[e.clientX,e.clientY];fly=null;if(narrow&&!list.classList.contains("collapsed")){search.blur();setListOpen(false)}});
 canvas.addEventListener("pointerup",e=>{if(!down||Math.hypot(e.clientX-down[0],e.clientY-down[1])>6)return;ndc.set(e.clientX/innerWidth*2-1,-(e.clientY/innerHeight)*2+1);ray.setFromCamera(ndc,camera);
-  const hit=ray.intersectObjects(clickables.filter(o=>o.visible),false)[0];
+  // a river counts only where its water is actually drawn (rivers are thin on the overview, their geometry is not)
+  const hit=ray.intersectObjects(clickables.filter(o=>o.visible),false).find(h=>{if(h.object.userData.pin)return true;const n=h.object.userData.name,it=items[n];if(!it||it.type!=="river")return true;
+    const rv=riverNear(h.point.x,h.point.z);return rv.d<=(rv.hw+.06)*riverWidth.value+.06});
   if(!hit){closeBubble();return}
   const n=hit.object.userData.pin||hit.object.userData.name;if(n)openBubble(n)});
 canvas.addEventListener("pointermove",e=>{if(e.pointerType!=="mouse")return;ndc.set(e.clientX/innerWidth*2-1,-(e.clientY/innerHeight)*2+1);ray.setFromCamera(ndc,camera);

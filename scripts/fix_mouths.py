@@ -53,6 +53,9 @@ for r in A:
     if r["id"] in MOUTH: r["mouth"], r["mouth_be"] = MOUTH[r["id"]]
 for k, v in BOOK.items(): B[k] = dict(v, head=k.upper(), into=None, where="")
 for k in DROP: B.pop(k, None)
+# book length far below the river's own length: OCR-garbled number or a namesake brook (check of 19.11) — keep OpenStreetMap figures instead
+LEN = {r["id"]: r["km"] for r in A}
+for k in [k for k, b in B.items() if k in LEN and b["km"] < .45 * LEN[k]]: B.pop(k)
 json.dump(A, open(os.path.join(D, "rivers_auto.json"), "w", encoding="utf8"), ensure_ascii=False, separators=(",", ":"))
 json.dump(B, open(os.path.join(D, "book_auto.json"), "w", encoding="utf8"), ensure_ascii=False, indent=0)
 print("no mouth left:", [r["id"] for r in A if not r["mouth"]], "| book matches:", len(B))
