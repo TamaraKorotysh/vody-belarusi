@@ -1250,15 +1250,18 @@ const nearCity=(x,z)=>Math.hypot(x-davyd.x,z-davyd.z)<.39||L.cities.some(([n,cx,
 }
 {
   const {x,z}=davyd,angle=.36;
+  // The Horyn doubles back here, so the visible water is wider than one centerline.
+  // Cross that whole channel, with the deck ends resting on the banks.
+  const bridgeX=-7.601,bridgeZ=26.246,bridgeAngle=.647,bridgeLen=.42;
   const bridge=new THREE.Group();
-  bridge.position.set(x,.571,z);
-  bridge.rotation.y=-angle;
+  bridge.position.set(bridgeX,.571,bridgeZ);
+  bridge.rotation.y=-bridgeAngle;
   const bridgeParts=[
-    [.150,.014,.026,0,0,0,"#918575"],
-    [.148,.009,.003,0,.010,-.014,"#ded3ba"],
-    [.148,.009,.003,0,.010,.014,"#ded3ba"],
-    [.009,.049,.022,-.023,-.027,0,"#a3937e"],
-    [.009,.049,.022,.023,-.027,0,"#a3937e"],
+    [bridgeLen,.014,.034,0,0,0,"#918575"],
+    [bridgeLen-.02,.009,.004,0,.010,-.018,"#ded3ba"],
+    [bridgeLen-.02,.009,.004,0,.010,.018,"#ded3ba"],
+    [.016,.049,.032,-.19,-.02,0,"#a3937e"],
+    [.016,.049,.032,.19,-.02,0,"#a3937e"],
   ];
   for(const [w,h,d,px,y,pz,color] of bridgeParts){
     const part=meshOf(facet(new THREE.BoxGeometry(w,h,d),()=>new THREE.Color(color)),faceted());
@@ -1266,15 +1269,15 @@ const nearCity=(x,z)=>Math.hypot(x-davyd.x,z-davyd.z)<.39||L.cities.some(([n,cx,
     bridge.add(part);
   }
   const ramps=[];
-  const cos=Math.cos(angle),sin=Math.sin(angle);
+  const cos=Math.cos(bridgeAngle),sin=Math.sin(bridgeAngle);
   for(const side of [-1,1]){
-    const near=.072*side,far=.112*side;
-    const edge=(along,across)=>[x+along*cos-across*sin,z+along*sin+across*cos];
-    const top=[-.013,.013].map(across=>{
+    const near=.20*side,far=.27*side;
+    const edge=(along,across)=>[bridgeX+along*cos-across*sin,bridgeZ+along*sin+across*cos];
+    const top=[-.016,.016].map(across=>{
       const [px,pz]=edge(near,across);
       return [px,.578,pz];
     });
-    const ground=[-.014,.014].map(across=>{
+    const ground=[-.018,.018].map(across=>{
       const [px,pz]=edge(far,across);
       return [px,Math.max(heightAt(px,pz)+.003,.567),pz];
     });
