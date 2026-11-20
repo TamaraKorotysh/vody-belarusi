@@ -19,7 +19,12 @@ MOUTH = {
     "Альзиница": ("Ушача", "Ушача"),                         # её устье у Ушачи
     "Зеха": ("Лепельское озеро", "Лепельскае возера"),       # «упадае ў Лепельскае возера з Пн»
     "Вымнянка (21 км)": ("Каспля", "Каспля"),               # левы прыток Касплі
+    # Усса сходится с Лошей, и с этой точки на карте начинается Нёман.
+    # OSM принял за устье соседнюю Юцевку: короткий отрезок Уссы проходит рядом с ней.
+    "Усса": ("Неман (вместе с Лошей)", "Нёман (разам з Лошай)"),
 }
+# the book calls these a right and a left tributary of the Neman; on the map they meet and the Neman starts there
+NO_SIDE = {"Усса", "Лоша (приток: Неман)"}
 # rivers whose mouth could not be established from the book or the map are left out
 DROP_RIVER = ["Мутвица", "Ушача (21 км)"]
 # book data for rivers the automatic match missed: km, basin, discharge, side
@@ -51,6 +56,8 @@ for r in A:
         if k in RU_OF: r["mouth"], r["mouth_be"] = RU_OF[k]
 for r in A:
     if r["id"] in MOUTH: r["mouth"], r["mouth_be"] = MOUTH[r["id"]]
+for rid in NO_SIDE:
+    if rid in B: B[rid]["side"] = None
 for k, v in BOOK.items(): B[k] = dict(v, head=k.upper(), into=None, where="")
 for k in DROP: B.pop(k, None)
 # book length far below the river's own length: OCR-garbled number or a namesake brook (check of 19.11) — keep OpenStreetMap figures instead
