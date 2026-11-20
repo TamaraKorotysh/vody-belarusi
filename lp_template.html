@@ -497,15 +497,45 @@ const waterTint=`float fl=fract(aEx.x*.22-uTime*.75+fract(aCen.x*37.+aCen.z*17.)
   vColor.rgb=mix(vColor.rgb,vec3(.86,.97,.96),.55*smoothstep(.72,.86,fl)*smoothstep(1.,.86,fl));
   float gw=.5+.5*sin(aEx.x*1.1-uTime*4.);vColor.rgb=mix(vColor.rgb,vec3(.2,.64,1.35)*(1.2+.6*gw),uSel*.95);`;
 let minorK=0;
+// A tributary's own ribbon stops where it enters a wider river, so the two meshes
+// don't cross and leave a jagged fan of triangles at the confluence.
+const clipCell=1.5,clipHash=new Map();
+for(const [cn,cr] of Object.entries(L.rivers))for(const seg of riverSegments(cr)){
+  const hw=Math.max(seg.fromWidth,seg.toWidth)+.06,span=Math.sqrt(seg.length)||1;
+  const item={cn,hw,a:seg.a,dx:seg.dx,dz:seg.dz,length:seg.length};
+  for(let s=0,n=Math.ceil(span/clipCell);s<=n;s++){
+    const t=s/n,x=seg.a[0]+seg.dx*t,z=seg.a[1]+seg.dz*t,k=Math.floor(x/clipCell)+","+Math.floor(z/clipCell);
+    (clipHash.get(k)||clipHash.set(k,[]).get(k)).push(item);
+  }
+}
+function coveredByWider(x,z,self,selfHw){
+  const ci=Math.floor(x/clipCell),cj=Math.floor(z/clipCell);
+  for(let a=-1;a<=1;a++)for(let b=-1;b<=1;b++){
+    const Ls=clipHash.get((ci+a)+","+(cj+b));if(!Ls)continue;
+    for(const s of Ls){
+      if(s.cn===self||s.hw<selfHw+.05||!s.length)continue;
+      const t=Math.max(0,Math.min(1,((x-s.a[0])*s.dx+(z-s.a[1])*s.dz)/s.length));
+      if((x-s.a[0]-s.dx*t)**2+(z-s.a[1]-s.dz*t)**2<s.hw*s.hw)return true;
+    }
+  }
+  return false;
+}
 for(const [name,r] of Object.entries(L.rivers)){
   const tris=[],exTri=[],oldChannelFaces=[],minor=!!(CARDS[name]&&CARDS[name].minor),auto=!!(CARDS[name]&&CARDS[name].auto);
   const uni={uT0:{value:reduce?-99:(auto?3.4+(minorK++)*.012:minor?2.2+(minorK++)*.09:.6)},uSpeed:{value:minor?24:34},uSel:{value:0}};
   for(const line of r.lines){
-    const rows=riverRows(r,line);
+    let rows=riverRows(r,line),cut=rows.length,dropped=0;
+    for(let i=rows.length-1;i>=1&&dropped<6;i--){
+      const p=rows[i];
+      if(!coveredByWider(p[0],p[1],name,riverHalfWidth(r,p)))break;
+      cut=i;dropped++;
+    }
+    const trimmed=cut<rows.length;
+    if(trimmed)rows=rows.slice(0,Math.max(2,cut+1));
     const at=(i,k)=>{const p=rows[i],p0=rows[Math.max(0,i-1)],p1=rows[Math.min(rows.length-1,i+1)];let tx=p1[0]-p0[0],tz=p1[1]-p0[1];const Lx=Math.hypot(tx,tz)||1;tx/=Lx;tz/=Lx;
       const detail=r===vetlitsa||r===lva?1:r===horyn?lowerHoryn(p[2]):0;
       const hw=riverHalfWidth(r,p)+.06*(1-detail),inner=k===1||k===2;
-      const jitter=THREE.MathUtils.lerp(.14,.009,detail)*Math.min(1,hw/.025);
+      const jitter=THREE.MathUtils.lerp(.14,.009,detail)*Math.min(1,hw/.025)*(trimmed&&i>=rows.length-3?.25:1);
       const jj=inner?(hash(i,k)-.5)*jitter:0,off=[-1,-.36,.36,1][k]*hw;
       return [p[0]-tz*off+tx*jj,p[3]+(inner?(hash(i,k+5)-.5)*THREE.MathUtils.lerp(.03,.004,detail):0),p[1]+tx*off+tz*jj,p[2],-tz*off,tx*off]};
     for(let i=0;i+1<rows.length;i++)for(let k=0;k<3;k++){
