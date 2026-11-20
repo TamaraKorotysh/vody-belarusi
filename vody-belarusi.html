@@ -106,6 +106,16 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   .tools button{padding:7px 12px;font-size:12px}
   .brand h1{font-size:21px}
 }
+#tour{position:fixed;inset:0;z-index:8;pointer-events:none}
+#tour[hidden]{display:none!important}
+#tourShade{position:fixed;inset:0;background:rgba(34,24,16,.5);pointer-events:auto}
+#tourRing{position:fixed;border:2px solid var(--accent);border-radius:16px;box-shadow:0 0 0 5px rgba(233,104,74,.28);pointer-events:none}
+#tourCard{position:fixed;z-index:9;width:min(320px,calc(100% - 28px));padding:16px 16px 14px;border-radius:14px;pointer-events:auto}
+.tour-k{margin:0 0 6px;font-family:var(--f-display);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent)}
+.tour-t{margin:0;font-weight:800}
+.tour-nav{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:14px}
+.tour-nav button{border:0;border-radius:999px;padding:8px 14px;font-family:var(--f-display);font-weight:500;letter-spacing:.06em;text-transform:uppercase;font-size:13px;background:transparent}
+#tourNext{background:var(--ink);color:var(--paper)}
 </style>
 
 <div class="loading" id="loading">Збіраем макет…</div>
@@ -117,6 +127,15 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 <div class="credit" id="credit">Высоты увеличены в 40 раз · Данные: <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap</a>, рельеф: Mapzen / AWS Terrain Tiles</div>
 <div class="tools"><button class="paper" id="refill">Наполнить</button><button class="paper" id="home">Весь макет</button></div>
 <article class="card paper hide" id="card" aria-live="polite"></article>
+<div id="tour" hidden>
+  <div id="tourShade"></div>
+  <div id="tourRing"></div>
+  <div class="paper" id="tourCard" role="dialog" aria-modal="true" aria-labelledby="tourT">
+    <p class="tour-k" id="tourK"></p>
+    <p class="tour-t" id="tourT"></p>
+    <div class="tour-nav"><button type="button" id="tourSkip"></button><button type="button" id="tourNext"></button></div>
+  </div>
+</div>
 
 <script>
 addEventListener("error",e=>{if(!document.getElementById("loading")){console.warn(e.message);return}   // after start-up a stray error must not cover the map
@@ -1220,13 +1239,14 @@ function renderCard(n){const c=CARDS[n],lake=c.type==="lake"||c.type==="reservoi
   ${hist?`<h3>${tx("hist")}</h3><p>${hist}</p>`:""}${facts.length?`<h3>${tx("facts")}</h3><ul>${facts.map(f=>`<li>${f}</li>`).join("")}</ul>`:""}
   <div class="note">${note}</div>`;
   document.getElementById("close").onclick=()=>select(null)}
+let tourOn=false;
 function applyLang(l){LANG=l;try{localStorage.setItem("lang",l)}catch(e){}
   document.documentElement.lang=l;document.title=tx("doc");document.getElementById("title").innerHTML=tx("title");document.getElementById("hint").textContent=tx("hint");document.getElementById("credit").innerHTML=tx("credit");
   document.getElementById("refill").textContent=tx("refill");document.getElementById("home").textContent=tx("home");document.getElementById("listLabel").textContent=tx("list");listClose.setAttribute("aria-label",tx("close"));
   list.setAttribute("aria-label",tx("list"));document.getElementById("c").setAttribute("aria-label",tx("canvas"));
   for(const b of document.querySelectorAll(".lang button"))b.setAttribute("aria-pressed",String(b.dataset.l===l));
   for(const lb of labels)lb.el.textContent=l==="be"?(lb.be||CITY_BE[lb.n]||lb.n):lb.n;
-  buildList();if(bubbleFor)openBubble(bubbleFor);if(selected)renderCard(selected)}
+  buildList();if(bubbleFor)openBubble(bubbleFor);if(selected)renderCard(selected);if(tourOn)showTourStep()}
 for(const b of document.querySelectorAll(".lang button"))b.onclick=()=>applyLang(b.dataset.l);
 function select(n,doFly){
   selected=n;
@@ -1257,6 +1277,48 @@ canvas.addEventListener("pointermove",e=>{if(e.pointerType!=="mouse")return;ndc.
 function resize(){renderer.setSize(innerWidth,innerHeight,false);camera.aspect=innerWidth/innerHeight;camera.fov=innerWidth<760?44:30;camera.updateProjectionMatrix()}
 addEventListener("resize",resize);resize();
 document.getElementById("loading").remove();
+const TOUR={
+ be:{skip:"Прапусціць",next:"Далей",done:"Зразумела",step:(i,n)=>`${i} / ${n}`,
+  items:[
+   {sel:".brand",t:"Круціце макет мышшу або пальцам, колам мышшы — бліжэй. Гэта «папяровы» макет Беларусі: рэкі, азёры і гарады."},
+   {cx:1,t:"Чырвоная пазнака — рака або возера. Націсніце на яе, потым на шыльдачку з назвай: адкрыецца картка з даўжынёй, гісторыяй і фактамі."},
+   {sel:"#list",t:"Спіс «Рэкі і азёры»: пошук па назве і пераход да любой ракі, возера, вадасховішча ці канала."},
+   {sel:"#refill",t:"«Напоўніць» зноў пускае ваду па рэчышчах — ад вытоку да вусця."},
+   {sel:"#home",t:"«Увесь макет» вяртае агляд краіны. Мову мяняюць кнопкі «Бел» і «Рус» уверсе."}]},
+ ru:{skip:"Пропустить",next:"Дальше",done:"Понятно",step:(i,n)=>`${i} / ${n}`,
+  items:[
+   {sel:".brand",t:"Вращайте макет мышью или пальцем, колёсиком — ближе. Это «бумажный» макет Беларуси: реки, озёра и города."},
+   {cx:1,t:"Красная булавка — река или озеро. Нажмите на неё, затем на табличку с названием: откроется карточка с длиной, историей и фактами."},
+   {sel:"#list",t:"Список «Реки и озёра»: поиск по названию и переход к любой реке, озеру, водохранилищу или каналу."},
+   {sel:"#refill",t:"«Наполнить» снова пускает воду по руслам — от истока к устью."},
+   {sel:"#home",t:"«Весь макет» возвращает обзор страны. Язык переключают кнопки «Бел» и «Рус» сверху."}]}};
+const tourEl=document.getElementById("tour"),tourShade=document.getElementById("tourShade"),tourRing=document.getElementById("tourRing"),tourCard=document.getElementById("tourCard");
+let tourI=0;
+function tourBox(step){
+  if(step.cx){const w=Math.min(260,innerWidth*.62),h=Math.min(150,innerHeight*.3);return {l:(innerWidth-w)/2,t:(innerHeight-h)/2-10,w,h}}
+  const r=document.querySelector(step.sel).getBoundingClientRect(),p=8;
+  return {l:r.left-p,t:r.top-p,w:r.width+p*2,h:r.height+p*2}}
+function showTourStep(){
+  const pack=TOUR[LANG],step=pack.items[tourI],b=tourBox(step),W=innerWidth,H=innerHeight;
+  const x=b.l,y=b.t,r=x+b.w,bm=y+b.h;
+  tourShade.style.clipPath=`polygon(evenodd,0px 0px,${W}px 0px,${W}px ${H}px,0px ${H}px,0px 0px,${x}px ${y}px,${x}px ${bm}px,${r}px ${bm}px,${r}px ${y}px,${x}px ${y}px)`;
+  tourRing.style.left=x+"px";tourRing.style.top=y+"px";tourRing.style.width=b.w+"px";tourRing.style.height=b.h+"px";
+  document.getElementById("tourK").textContent=pack.step(tourI+1,pack.items.length);
+  document.getElementById("tourT").textContent=step.t;
+  document.getElementById("tourSkip").textContent=pack.skip;
+  const nxt=document.getElementById("tourNext");nxt.textContent=tourI===pack.items.length-1?pack.done:pack.next;
+  const cw=tourCard.offsetWidth,ch=tourCard.offsetHeight,gap=16;
+  let left=Math.min(Math.max(12,b.l),W-cw-12),top=bm+gap;
+  if(top+ch>H-12)top=y-ch-gap;if(top<12)top=Math.min(H-ch-12,bm+gap);if(top<12)top=12;
+  tourCard.style.left=left+"px";tourCard.style.top=top+"px"}
+function endTour(){tourOn=false;tourEl.hidden=true;try{localStorage.setItem("tour","1")}catch(e){}}
+function openTour(){tourOn=true;tourI=0;tourEl.hidden=false;showTourStep();document.getElementById("tourNext").focus()}
+document.getElementById("tourNext").onclick=()=>{if(tourI>=TOUR[LANG].items.length-1)endTour();else{tourI++;showTourStep()}};
+document.getElementById("tourSkip").onclick=endTour;
+addEventListener("keydown",e=>{if(tourOn&&e.key==="Escape"){e.preventDefault();endTour()}});
+addEventListener("resize",()=>{if(tourOn)showTourStep()});
+let tourSeen=false;try{tourSeen=localStorage.getItem("tour")==="1"}catch(e){}
+if(!tourSeen)setTimeout(openTour,reduce?500:1600);
 const start=performance.now();
 const scaleBar=document.querySelector("#scale i"),scaleLbl=document.querySelector("#scale span"),_sa=new THREE.Vector3(),_sb=new THREE.Vector3(),_sr=new THREE.Vector3();let scaleTick=0;
 function loop(now){
