@@ -157,6 +157,14 @@ const CITY_BE={"Минск":"Мінск","Гомель":"Гомель","Вите
 const plain=n=>n.replace(" (река)","").replace(/ \(.*\)$/,"");
 function dname(n){const c=CARDS[n];return LANG==="be"&&c&&c.be&&c.be!=="—"?c.be:plain(n)}
 function listName(n){if(LANG!=="be")return n.replace(" (река)","");const c=CARDS[n],m=n.match(/ \(приток: (.*)\)$/);return dname(n)+(m?" (прыток: "+((c&&c.mouthBe)||m[1])+")":"")}
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+let NAME_RE;
+function nameRe(){if(NAME_RE)return NAME_RE;const set=new Set(),add=s=>{s=String(s||"").trim();if(s.length>=3&&s!=="—")set.add(s)};
+  for(const [k,c] of Object.entries(CARDS)){add(plain(k));if(c){add(c.be);add(c.ru);add(c.mouth);add(c.mouthBe)}}
+  for(const [n,be] of Object.entries(CITY_BE)){add(n);add(be)}
+  const body=[...set].sort((a,b)=>b.length-a.length).map(s=>s.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")).join("|");
+  NAME_RE=body?new RegExp("(?<![A-Za-zА-Яа-яЁёІіЎў-])(?:"+body+")(?![A-Za-zА-Яа-яЁёІіЎў-])","g"):/$^/;return NAME_RE}
+function keep(s){const t=String(s),re=nameRe();let out="",i=0,m;re.lastIndex=0;while((m=re.exec(t))){out+=esc(t.slice(i,m.index))+`<span class="notranslate" translate="no">${esc(m[0])}</span>`;i=m.index+m[0].length;if(m.index===re.lastIndex)re.lastIndex++}return out+esc(t.slice(i))}
 (async()=>{
 try{await document.fonts.load('700 120px "Oswald"')}catch(e){}
 THREE.ColorManagement.legacyMode=false;
@@ -826,7 +834,7 @@ for(const [name,it] of Object.entries(items)){
 const bubble=document.createElement("button");bubble.className="bubble";bubble.hidden=true;document.body.appendChild(bubble);
 let bubbleFor=null;
 function highlight(n){for(const [k,it] of Object.entries(items))it.uni.uSel.value=k===n?1:0}
-function openBubble(n){if(selected&&selected!==n){selected=null;card.classList.add("hide");for(const b of Object.values(chips))b.setAttribute("aria-pressed","false")}highlight(n);bubbleFor=n;const it=items[n];bubble.innerHTML=`<span class="bk">${CARDS[n]&&CARDS[n].type==="canal"?tx("canalL"):CARDS[n]&&CARDS[n].type==="reservoir"?tx("resL"):it.type==="lake"?tx("lakeL"):tx("riverL")}</span><span class="bn">${dname(n)}</span><span class="bm">${tx("more")}</span>`;bubble.hidden=false}
+function openBubble(n){if(selected&&selected!==n){selected=null;card.classList.add("hide");for(const b of Object.values(chips))b.setAttribute("aria-pressed","false")}highlight(n);bubbleFor=n;const it=items[n];bubble.innerHTML=`<span class="bk">${CARDS[n]&&CARDS[n].type==="canal"?tx("canalL"):CARDS[n]&&CARDS[n].type==="reservoir"?tx("resL"):it.type==="lake"?tx("lakeL"):tx("riverL")}</span><span class="bn notranslate" translate="no">${esc(dname(n))}</span><span class="bm">${tx("more")}</span>`;bubble.hidden=false}
 function closeBubble(){bubbleFor=null;bubble.hidden=true;highlight(selected)}
 bubble.onclick=()=>{if(bubbleFor)select(bubbleFor,true)};
 // ---------------------------------------------------------------- city labels
@@ -834,7 +842,8 @@ const labelsEl=document.getElementById("labels"),labels=[];
 const cityLabels=[...L.cities,[davyd.ru,davyd.x+.18,davyd.z,4,davyd.be]];
 for(const [n,x,z,r,be] of cityLabels){
   const el=document.createElement("div");
-  el.className="city"+(r===2?" small":r===3?" tiny":r===4?" micro":"");
+  el.className="city notranslate"+(r===2?" small":r===3?" tiny":r===4?" micro":"");
+  el.translate=false;
   el.textContent=LANG==="be"?(be||CITY_BE[n]||n):n;
   labelsEl.appendChild(el);
   const lift=n===davyd.ru?.59:r===1?1.6:1.1;
@@ -862,7 +871,7 @@ function buildList(){listBody.textContent="";listBody.appendChild(search);groups
     const h=document.createElement("button");h.className="grp";h.innerHTML=`<span>${tx("g_"+key)}</span><small>${ents.length}</small><i></i>`;
     h.onclick=()=>{openGroups[key]=!openGroups[key];filter()};listBody.appendChild(h);const g={key,h,chips:[]};groups.push(g);
     for(const [n,c] of ents){const b=document.createElement("button");b.className="chip "+type+(c.minor?" minor":"");b.setAttribute("aria-pressed",String(n===selected));
-      b.innerHTML=`<i></i>${listName(n)}`;b.dataset.q=(n+" "+(c.be||"")).toLowerCase();
+      b.innerHTML=`<i></i><span class="notranslate" translate="no">${esc(listName(n))}</span>`;b.dataset.q=(n+" "+(c.be||"")).toLowerCase();
       b.onclick=()=>{select(n,true);if(narrow)setListOpen(false)};listBody.appendChild(b);chips[n]=b;g.chips.push([n,b])}}
   filter()}
 function filter(){const q=search.value.trim().toLowerCase();
@@ -900,16 +909,16 @@ function renderCard(n){const c=CARDS[n],lake=c.type==="lake"||c.type==="reservoi
   let stats=cb?cb.stats:c.stats,from=cb?cb.from:c.from,to=cb?cb.to:c.to,hist=cb?cb.name:c.name,facts=cb?cb.facts:c.facts,note=tx("noteCur");
   if(c.auto){const num=v=>String(v).replace(".",",");stats=[[tx("len"),(c.book?"":"≈ ")+num(c.km)+" км"]];
     if(!c.book)stats.push([tx("inBY"),"≈ "+c.kin+" км"]);if(c.basin)stats.push([tx("basin"),c.basin+" км²"]);if(c.q)stats.push([tx("q"),c.q+" м³/с"]);
-    const mo=be?c.mouthBe:c.mouth;if(mo)stats.push([tx("into"),mo+(c.side?` <small>(${tx(c.side==="левы"?"left":"right")})</small>`:"")]);
+    const mo=be?c.mouthBe:c.mouth;if(mo)stats.push([tx("into"),`<span class="notranslate" translate="no">${esc(mo)}</span>`+(c.side?` <small>(${tx(c.side==="левы"?"left":"right")})</small>`:"")]);
     from=["",""];to=["",""];hist="";facts=[];note=c.book?tx("noteBook"):tx("noteOsm")}
   const F=typeof FACTS!=="undefined"&&FACTS[n];   // name history and facts found online for cards the book left empty
   if(F){const X=be?F.be:F.ru;if(!hist&&X.name)hist=X.name;if(!(facts&&facts.length))facts=X.facts||[];
     note+=" "+tx("src")+": "+F.src.map(u=>`<a href="${u}" target="_blank" rel="noopener">${tx("wiki")}</a>`).join(", ")+"."}
   const other=be?plain(n):(c.be&&c.be!=="—"?c.be:"");
-  card.innerHTML=`<button class="close" id="close" aria-label="${tx("close")}">×</button><div class="kind">${res?tx("res"):canal?tx("canal"):lake?tx("lake"):tx("river")}</div><h2>${dname(n)}</h2>${other?`<div class="be">${tx("other")}${other}</div>`:""}
-  <dl class="stats">${stats.map(([k,v])=>`<div><dt>${k}</dt><dd>${v}</dd></div>`).join("")}</dl>
-  ${from[0]?`<h3>${lake?tx("link"):tx("route")}</h3><div class="route"><span class="dot"></span><span><b>${from[0]}</b><small>${from[1]}</small></span><span class="ln"></span><span></span><span class="dot end"></span><span><b>${to[0]}</b><small>${to[1]}</small></span></div>`:""}
-  ${hist?`<h3>${tx("hist")}</h3><p>${hist}</p>`:""}${facts.length?`<h3>${tx("facts")}</h3><ul>${facts.map(f=>`<li>${f}</li>`).join("")}</ul>`:""}
+  card.innerHTML=`<button class="close" id="close" aria-label="${tx("close")}">×</button><div class="kind">${res?tx("res"):canal?tx("canal"):lake?tx("lake"):tx("river")}</div><h2 class="notranslate" translate="no">${esc(dname(n))}</h2>${other?`<div class="be">${tx("other")}<span class="notranslate" translate="no">${esc(other)}</span></div>`:""}
+  <dl class="stats">${stats.map(([k,v])=>`<div><dt>${esc(k)}</dt><dd>${String(v).includes("<")?v:keep(v)}</dd></div>`).join("")}</dl>
+  ${from[0]?`<h3>${lake?tx("link"):tx("route")}</h3><div class="route"><span class="dot"></span><span><b>${keep(from[0])}</b><small>${keep(from[1])}</small></span><span class="ln"></span><span></span><span class="dot end"></span><span><b>${keep(to[0])}</b><small>${keep(to[1])}</small></span></div>`:""}
+  ${hist?`<h3>${tx("hist")}</h3><p>${keep(hist)}</p>`:""}${facts.length?`<h3>${tx("facts")}</h3><ul>${facts.map(f=>`<li>${keep(f)}</li>`).join("")}</ul>`:""}
   <div class="note">${note}</div>`;
   document.getElementById("close").onclick=()=>select(null)}
 function applyLang(l){LANG=l;try{localStorage.setItem("lang",l)}catch(e){}
