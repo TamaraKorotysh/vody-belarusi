@@ -1134,55 +1134,114 @@ const waterTint=`float fl=fract(aEx.x*.22-uTime*.75+fract(aCen.x*37.+aCen.z*17.)
   vColor.rgb=mix(vColor.rgb,vec3(.86,.97,.96),.55*smoothstep(.72,.86,fl)*smoothstep(1.,.86,fl));
   float gw=.5+.5*sin(aEx.x*1.1-uTime*4.);vColor.rgb=mix(vColor.rgb,vec3(.2,.64,1.35)*(1.2+.6*gw),uSel*.95);`;
 let minorK=0;
-// Only the Usa that joins the Berezina. Its ribbon used to run across the wider
-// river; stop it at the bank. Every other river is drawn exactly as before.
-const berezinaSegs=riverSegments(L.rivers["Березина"]);
-function berezinaHit(x,z){
-  let best=1e9,hw=0;
-  for(const s of berezinaSegs){
-    if(!s.length)continue;
-    const t=Math.max(0,Math.min(1,((x-s.a[0])*s.dx+(z-s.a[1])*s.dz)/s.length));
-    const d2=(x-s.a[0]-s.dx*t)**2+(z-s.a[1]-s.dz*t)**2;
-    if(d2<best){best=d2;hw=Math.max(s.fromWidth,s.toWidth)+.06}
-  }
-  return {d:Math.sqrt(best),hw};
+// Where a line runs into another river, cut its end along that river's bank.
+// A line that simply continues the same river, and the wider river at a junction, stay whole.
+function drawnHalf(r,p){
+  const detail=r===vetlitsa||r===lva?1:r===horyn?lowerHoryn(p[2]):0;
+  return riverHalfWidth(r,p)+.06*(1-detail);
 }
+const mouthCell=1.5,mouthGrid=new Map(),mouthLines=[];
+for(const [,r] of Object.entries(L.rivers))for(const line of r.lines){
+  const rows=riverRows(r,line),id=mouthLines.length;
+  mouthLines.push({r,rows,id});
+  for(let i=1;i<rows.length;i++){
+    const a=rows[i-1],b=rows[i],dx=b[0]-a[0],dz=b[1]-a[1],length=dx*dx+dz*dz;
+    if(!length)continue;
+    const from=drawnHalf(r,a),to=drawnHalf(r,b),hw=Math.max(from,to);
+    const seg={a,b,dx,dz,length,from,to,id,r,span:Math.sqrt(length)};
+    const x0=Math.floor((Math.min(a[0],b[0])-hw-.2)/mouthCell),x1=Math.floor((Math.max(a[0],b[0])+hw+.2)/mouthCell);
+    const z0=Math.floor((Math.min(a[1],b[1])-hw-.2)/mouthCell),z1=Math.floor((Math.max(a[1],b[1])+hw+.2)/mouthCell);
+    for(let x=x0;x<=x1;x++)for(let z=z0;z<=z1;z++){const k=x+","+z;(mouthGrid.get(k)||mouthGrid.set(k,[]).get(k)).push(seg)}
+  }
+}
+function mouthHit(x,z,skip){
+  let best=1e9,hw=0,seg=null,t=0;
+  const ci=Math.floor(x/mouthCell),cj=Math.floor(z/mouthCell);
+  for(let a=-1;a<=1;a++)for(let b=-1;b<=1;b++){
+    const list=mouthGrid.get((ci+a)+","+(cj+b));if(!list)continue;
+    for(const s of list){
+      if(s.id===skip)continue;
+      const tt=Math.max(0,Math.min(1,((x-s.a[0])*s.dx+(z-s.a[1])*s.dz)/s.length));
+      const d2=(x-s.a[0]-s.dx*tt)**2+(z-s.a[1]-s.dz*tt)**2;
+      if(d2<best){best=d2;hw=s.from+(s.to-s.from)*tt;seg=s;t=tt}
+    }
+  }
+  return {d:Math.sqrt(best),hw,seg,t};
+}
+function mouthFit(line,end){
+  const rows=line.rows;if(rows.length<2)return null;
+  const last=end==="hi"?rows.length-1:0,prev=rows[end==="hi"?last-1:1],tip=rows[last];
+  const own=drawnHalf(line.r,tip),hit=mouthHit(tip[0],tip[1],line.id);
+  if(!hit.seg||hit.d>hit.hw+own)return null;
+  const back=mouthHit(prev[0],prev[1],line.id);
+  if(!(hit.d<=hit.hw||hit.d<back.d-.008))return null;
+  if(hit.seg.r===line.r){
+    const fromEnd=Math.min(hit.t,1-hit.t)*hit.seg.span;
+    if(fromEnd<=.28){
+      const tx=tip[0]-prev[0],tz=tip[1]-prev[1];
+      const dot=Math.abs(tx*hit.seg.dx+tz*hit.seg.dz)/((Math.hypot(tx,tz)*hit.seg.span)||1);
+      if(dot>.65)return null;
+    }
+  }
+  const fromEnd=Math.min(hit.t,1-hit.t)*hit.seg.span;
+  if(fromEnd<=.3&&!(hit.hw>own*1.2))return null;
+  const step=end==="hi"?-1:1,stop=end==="hi"?0:rows.length-1;
+  let outside=-1,walked=0;
+  for(let i=last;i!==stop;i+=step){
+    const h=mouthHit(rows[i][0],rows[i][1],line.id);
+    walked++;
+    if(h.d<=h.hw){if(walked>8){outside=-1;break}continue}
+    outside=i;break;
+  }
+  if(outside<0)return null;
+  const extending=outside===last,a=rows[outside];
+  const b=extending?rows[end==="hi"?last-1:1]:rows[outside-step];
+  let tx=extending?a[0]-b[0]:b[0]-a[0],tz=extending?a[1]-b[1]:b[1]-a[1],Lx=Math.hypot(tx,tz)||1;tx/=Lx;tz/=Lx;
+  const hw=drawnHalf(line.r,a),perpx=-tz,perpz=tx;
+  const along=(ox,oz)=>{
+    let u0=0,f0=mouthHit(ox,oz,line.id),s0=f0.d-f0.hw,u1=s0>0?.04:-.04,f1=mouthHit(ox+tx*u1,oz+tz*u1,line.id),s1=f1.d-f1.hw;
+    for(let n=0;n<18&&s0*s1>0&&Math.abs(u1)<.7;n++){u1*=1.5;f1=mouthHit(ox+tx*u1,oz+tz*u1,line.id);s1=f1.d-f1.hw}
+    if(s0*s1>0)return null;
+    let lo=u0,hi=u1;
+    for(let k=0;k<16;k++){const m=(lo+hi)/2,h=mouthHit(ox+tx*m,oz+tz*m,line.id);if((h.d-h.hw)*s0>0)lo=m;else hi=m}
+    return hi;
+  };
+  const uL=along(a[0]+perpx*-hw,a[1]+perpz*-hw),uR=along(a[0]+perpx*hw,a[1]+perpz*hw);
+  if(uL==null||uR==null||Math.abs(uL)>.45||Math.abs(uR)>.45)return null;
+  const cap=[-1,-.36,.36,1].map(side=>{
+    const off=side*hw,ox=a[0]+perpx*off,oz=a[1]+perpz*off;
+    let u=along(ox,oz);
+    if(u==null||Math.abs(u)>.45)u=uL+(side+1)/2*(uR-uL);
+    return [ox+tx*u,a[3],oz+tz*u,a[2],-tz*off,tx*off];
+  });
+  return {outside,extending,cap};
+}
+let mouthCursor=0;
 for(const [name,r] of Object.entries(L.rivers)){
   const tris=[],exTri=[],oldChannelFaces=[],minor=!!(CARDS[name]&&CARDS[name].minor),auto=!!(CARDS[name]&&CARDS[name].auto);
   const uni={uT0:{value:reduce?-99:(auto?3.4+(minorK++)*.012:minor?2.2+(minorK++)*.09:.6)},uSpeed:{value:minor?24:34},uSel:{value:0}};
   for(const line of r.lines){
-    let rows=riverRows(r,line),trimmed=false;
-    let mouthCap=null;
-    if(name==="Уса (приток: Березина)"){
-      for(let i=rows.length-1;i>=1;i--){
-        const here=berezinaHit(rows[i][0],rows[i][1]);
-        if(here.d<=here.hw)continue;
-        const a=rows[i],b=rows[Math.min(rows.length-1,i+1)];
-        let tx=b[0]-a[0],tz=b[1]-a[1],Lx=Math.hypot(tx,tz)||1;tx/=Lx;tz/=Lx;
-        const hw=riverHalfWidth(r,a)+.06,perpx=-tz,perpz=tx;
-        const along=(ox,oz)=>{
-          let u0=0,f0=berezinaHit(ox,oz),s0=f0.d-f0.hw,u1=s0>0?.04:-.04,f1=berezinaHit(ox+tx*u1,oz+tz*u1),s1=f1.d-f1.hw;
-          for(let n=0;n<24&&s0*s1>0&&Math.abs(u1)<2;n++){u1*=1.5;f1=berezinaHit(ox+tx*u1,oz+tz*u1);s1=f1.d-f1.hw}
-          if(s0*s1>0)return 0;
-          let lo=u0,hi=u1;
-          for(let k=0;k<16;k++){const m=(lo+hi)/2,h=berezinaHit(ox+tx*m,oz+tz*m);if((h.d-h.hw)*s0>0)lo=m;else hi=m}
-          return hi;
-        };
-        mouthCap=[-1,-.36,.36,1].map(side=>{
-          const off=side*hw,ox=a[0]+perpx*off,oz=a[1]+perpz*off,u=along(ox,oz);
-          return [ox+tx*u,a[3],oz+tz*u,a[2],-tz*off,tx*off];
-        });
-        rows=rows.slice(0,i+1).concat([[a[0],a[1],a[2],a[3]]]);
-        trimmed=true;
-        break;
-      }
+    const src=mouthLines[mouthCursor++];
+    const lo=mouthFit(src,"lo"),hi=mouthFit(src,"hi");
+    const base=src.rows;
+    let from=0,to=base.length,headCap=null,mouthCap=null;
+    if(lo&&hi&&!lo.extending&&!hi.extending&&hi.outside<=lo.outside){/* the two cuts would erase the line */}
+    else{
+      if(lo){headCap=lo.cap;if(!lo.extending)from=lo.outside}
+      if(hi){mouthCap=hi.cap;if(!hi.extending)to=hi.outside+1}
     }
+    let rows=to-from>=2?base.slice(from,to):base.slice();
+    if(to-from<2){headCap=null;mouthCap=null}
+    if(headCap&&!(lo&&lo.extending))rows=[[rows[0][0],rows[0][1],rows[0][2],rows[0][3]]].concat(rows);
+    if(mouthCap&&!(hi&&hi.extending)){const a=rows[rows.length-1];rows=rows.concat([[a[0],a[1],a[2],a[3]]])}
     const at=(i,k)=>{
+      if(headCap&&i===0)return headCap[k];
       if(mouthCap&&i===rows.length-1)return mouthCap[k];
       const p=rows[i],p0=rows[Math.max(0,i-1)],p1=rows[Math.min(rows.length-1,i+1)];let tx=p1[0]-p0[0],tz=p1[1]-p0[1];const Lx=Math.hypot(tx,tz)||1;tx/=Lx;tz/=Lx;
       const detail=r===vetlitsa||r===lva?1:r===horyn?lowerHoryn(p[2]):0;
       const hw=riverHalfWidth(r,p)+.06*(1-detail),inner=k===1||k===2;
-      const jitter=THREE.MathUtils.lerp(.14,.009,detail)*Math.min(1,hw/.025)*(trimmed&&i>=rows.length-3?.25:1);
+      const edge=(headCap&&i<3)||(mouthCap&&i>=rows.length-3);
+      const jitter=THREE.MathUtils.lerp(.14,.009,detail)*Math.min(1,hw/.025)*(edge ? .25 : 1);
       const jj=inner?(hash(i,k)-.5)*jitter:0,off=[-1,-.36,.36,1][k]*hw;
       return [p[0]-tz*off+tx*jj,p[3]+(inner?(hash(i,k+5)-.5)*THREE.MathUtils.lerp(.03,.004,detail):0),p[1]+tx*off+tz*jj,p[2],-tz*off,tx*off]};
     for(let i=0;i+1<rows.length;i++)for(let k=0;k<3;k++){
