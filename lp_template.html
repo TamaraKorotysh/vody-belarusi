@@ -511,7 +511,7 @@ for(const [,r] of Object.entries(L.rivers))for(const line of r.lines){
     const a=rows[i-1],b=rows[i],dx=b[0]-a[0],dz=b[1]-a[1],length=dx*dx+dz*dz;
     if(!length)continue;
     const from=drawnHalf(r,a),to=drawnHalf(r,b),hw=Math.max(from,to);
-    const seg={a,b,dx,dz,length,from,to,id,r,span:Math.sqrt(length)};
+    const seg={a,b,dx,dz,length,from,to,id,r,span:Math.sqrt(length),line0:rows[0],line1:rows[rows.length-1]};
     const x0=Math.floor((Math.min(a[0],b[0])-hw-.2)/mouthCell),x1=Math.floor((Math.max(a[0],b[0])+hw+.2)/mouthCell);
     const z0=Math.floor((Math.min(a[1],b[1])-hw-.2)/mouthCell),z1=Math.floor((Math.max(a[1],b[1])+hw+.2)/mouthCell);
     for(let x=x0;x<=x1;x++)for(let z=z0;z<=z1;z++){const k=x+","+z;(mouthGrid.get(k)||mouthGrid.set(k,[]).get(k)).push(seg)}
@@ -546,8 +546,9 @@ function mouthFit(line,end){
       if(dot>.65)return null;
     }
   }
-  const fromEnd=Math.min(hit.t,1-hit.t)*hit.seg.span;
-  if(fromEnd<=.3&&!(hit.hw>own*1.2))return null;
+  const px=hit.seg.a[0]+hit.seg.dx*hit.t,pz=hit.seg.a[1]+hit.seg.dz*hit.t;
+  const lineEnd=Math.min(Math.hypot(px-hit.seg.line0[0],pz-hit.seg.line0[1]),Math.hypot(px-hit.seg.line1[0],pz-hit.seg.line1[1]));
+  if(lineEnd<=.35&&!(hit.hw>own*1.15))return null;
   const step=end==="hi"?-1:1,stop=end==="hi"?0:rows.length-1;
   let outside=-1,walked=0;
   for(let i=last;i!==stop;i+=step){
