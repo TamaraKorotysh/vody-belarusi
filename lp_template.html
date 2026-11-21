@@ -43,6 +43,12 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .grp[hidden]{display:none!important}
 .brand{display:grid;grid-template-columns:auto auto;column-gap:14px;align-items:center}
 .brand h1{grid-column:1;grid-row:1}.brand p{grid-column:1/3}
+#reportCard h2{font-size:26px}
+#reportCard textarea{display:block;width:100%;box-sizing:border-box;min-height:120px;margin:12px 0;border:1px solid var(--line);border-radius:10px;background:#fffaf0;font:inherit;font-size:14px;line-height:1.45;padding:10px;resize:vertical;color:var(--ink)}
+#reportCard textarea:focus{outline:2px solid var(--accent);outline-offset:1px}
+#reportCard .send{border:0;border-radius:999px;padding:9px 15px;font-family:var(--f-display);font-weight:500;letter-spacing:.06em;text-transform:uppercase;font-size:13px}
+#reportCard .send:disabled{opacity:.55}
+#reportCard .status{min-height:1.2em;margin:8px 0 0;font-size:13px;font-weight:800;color:var(--accent)}
 .lang{grid-column:2;grid-row:1;justify-self:end;display:flex;margin:0;border:1px solid var(--line);border-radius:999px;overflow:hidden}
 .lang button{border:0;background:none;padding:3px 9px;font-family:var(--f-display);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink2)}
 .lang button[aria-pressed="true"]{background:var(--ink);color:var(--paper)}
@@ -62,7 +68,7 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .scale i{display:block;height:6px;border:2px solid var(--ink);border-top:0;width:80px;background:linear-gradient(90deg,var(--ink) 0 50%,transparent 50%) bottom/100% 2px no-repeat;opacity:.8}
 .scale span{font-family:var(--f-display);font-size:11px;letter-spacing:.06em;color:var(--ink)}
 .tools{position:fixed;right:calc(env(safe-area-inset-right,0px) + 14px);bottom:calc(env(safe-area-inset-bottom,0px) + 14px);display:flex;gap:8px;z-index:3}
-.tools button{border-radius:999px;padding:9px 15px;font-family:var(--f-display);font-weight:500;letter-spacing:.06em;text-transform:uppercase;font-size:13px}
+.tools button{border-radius:999px;padding:9px 15px;font-family:var(--f-display);font-weight:500;letter-spacing:.06em;text-transform:uppercase;font-size:13px;white-space:nowrap}
 #labels{position:fixed;inset:0;pointer-events:none;z-index:2;overflow:hidden}
 .city{position:absolute;left:0;top:0;white-space:nowrap;font-family:var(--f-display);font-weight:500;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink);text-shadow:0 0 3px var(--paper),0 0 3px var(--paper),0 0 6px var(--paper);will-change:transform}
 .city{font-size:15px;font-weight:700;letter-spacing:.1em}
@@ -115,8 +121,17 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 <nav class="list paper collapsed" id="list" aria-label="Реки и озёра"><button class="ltog" id="listToggle" aria-expanded="false" aria-controls="listBody"><i class="ic"></i><span id="listLabel">Реки и озёра</span><i class="chev"></i></button><div id="listBody"></div></nav>
 <div class="scale" id="scale" aria-hidden="true"><i></i><span>50 км</span></div>
 <div class="credit" id="credit">Высоты увеличены в 40 раз · Данные: <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap</a>, рельеф: Mapzen / AWS Terrain Tiles</div>
-<div class="tools"><button class="paper" id="refill">Наполнить</button><button class="paper" id="home">Весь макет</button></div>
+<div class="tools"><button class="paper" id="refill">Наполнить</button><button class="paper" id="home">Весь макет</button><button type="button" class="paper" id="report">Напісаць пра памылку</button></div>
 <article class="card paper hide" id="card" aria-live="polite"></article>
+<form class="card paper hide" id="reportCard">
+  <button type="button" class="close" id="reportClose" aria-label="Закрыць">×</button>
+  <div class="kind" id="reportKind">Аўтару</div>
+  <h2 id="reportTitle">Напісаць аўтару пра памылку</h2>
+  <p class="be" id="reportLead">Паведамленне прыйдзе аўтару на пошту.</p>
+  <textarea id="reportText" class="notranslate" translate="no" maxlength="2000" required placeholder="Напрыклад: рака паказана не там"></textarea>
+  <button type="submit" class="paper send" id="reportSend">Адправіць</button>
+  <p class="status" id="reportStatus" role="status"></p>
+</form>
 
 <script>
 addEventListener("error",e=>{if(!document.getElementById("loading")){console.warn(e.message);return}   // after start-up a stray error must not cover the map
@@ -141,6 +156,7 @@ const TX={
   src:"Название и факты",wiki:"Википедия",river:"Река",lake:"Озеро",res:"Водохранилище",canal:"Канал",riverL:"река",lakeL:"озеро",resL:"водохранилище",canalL:"канал",g_res:"Водохранилища",g_canal:"Каналы",more:"подробнее ›",route:"Откуда и куда",link:"Связь с реками",hist:"История названия",facts:"Интересные факты",
   close:"Закрыть",other:"по-белорусски: ",g_main:"Главные реки",g_minor:"Притоки",g_lake:"Озёра",g_auto:"Малые реки",
   len:"Длина",inBY:"По Беларуси",basin:"Бассейн",q:"Расход в устье",into:"Впадает в",left:"левый приток",right:"правый приток",
+  report:"Написать об ошибке",reportKind:"Автору",reportTitle:"Написать автору об ошибке",reportLead:"Сообщение придёт автору на почту.",reportPh:"Например: река показана не там",reportSend:"Отправить",reportWait:"Отправляем…",reportDone:"Отправлено. Спасибо, автор получит письмо.",reportFail:"Не удалось отправить. Попробуйте ещё раз чуть позже.",reportNeed:"На почту автора отправлено письмо для включения формы. Его нужно открыть один раз, после этого сообщения начнут приходить.",
   noteCur:"Цифры сверены с «Блакітнай кнігай Беларусі» (1994). Версии происхождения названий взяты из других источников: в этой книге их нет.",
   noteBook:"Длина, бассейн и расход — по «Блакітнай кнізе Беларусі» (1994). Устье определено по OpenStreetMap.",
   noteOsm:"Длина и устье посчитаны автоматически по данным OpenStreetMap; в «Блакітнай кнізе Беларусі» эту реку найти не удалось."},
@@ -149,6 +165,7 @@ const TX={
   src:"Назва і факты",wiki:"Вікіпедыя",river:"Рака",lake:"Возера",res:"Вадасховішча",canal:"Канал",riverL:"рака",lakeL:"возера",resL:"вадасховішча",canalL:"канал",g_res:"Вадасховішчы",g_canal:"Каналы",more:"падрабязней ›",route:"Адкуль і куды",link:"Сувязь з рэкамі",hist:"Гісторыя назвы",facts:"Цікавыя факты",
   close:"Закрыць",other:"па-руску: ",g_main:"Галоўныя рэкі",g_minor:"Прытокі",g_lake:"Азёры",g_auto:"Малыя рэкі",
   len:"Даўжыня",inBY:"Па Беларусі",basin:"Басейн",q:"Расход у вусці",into:"Упадае ў",left:"левы прыток",right:"правы прыток",
+  report:"Напісаць пра памылку",reportKind:"Аўтару",reportTitle:"Напісаць аўтару пра памылку",reportLead:"Паведамленне прыйдзе аўтару на пошту.",reportPh:"Напрыклад: рака паказана не там",reportSend:"Адправіць",reportWait:"Адпраўляем…",reportDone:"Адпраўлена. Дзякуй, аўтар атрымае ліст.",reportFail:"Не ўдалося адправіць. Паспрабуйце яшчэ раз крыху пазней.",reportNeed:"На пошту аўтара адпраўлены ліст, каб уключыць форму. Яго трэба адкрыць адзін раз, пасля гэтага паведамленні пачнуць прыходзіць.",
   noteCur:"Лічбы звераны з «Блакітнай кнігай Беларусі» (1994). Версіі паходжання назваў узяты з іншых крыніц: у гэтай кнізе іх няма.",
   noteBook:"Даўжыня, басейн і расход — паводле «Блакітнай кнігі Беларусі» (1994). Вусце вызначана паводле OpenStreetMap.",
   noteOsm:"Даўжыня і вусце вызначаны аўтаматычна паводле даных OpenStreetMap; у «Блакітнай кнізе Беларусі» гэтую раку знайсці не ўдалося."}};
@@ -987,12 +1004,14 @@ function renderCard(n){const c=CARDS[n],lake=c.type==="lake"||c.type==="reservoi
 function applyLang(l){LANG=l;try{localStorage.setItem("lang",l)}catch(e){}
   document.documentElement.lang=l;document.title=tx("doc");document.getElementById("title").innerHTML=tx("title");document.getElementById("hint").textContent=tx("hint");document.getElementById("credit").innerHTML=tx("credit");
   document.getElementById("refill").textContent=tx("refill");document.getElementById("home").textContent=tx("home");document.getElementById("listLabel").textContent=tx("list");listClose.setAttribute("aria-label",tx("close"));
+  document.getElementById("report").textContent=tx("report");document.getElementById("reportKind").textContent=tx("reportKind");document.getElementById("reportTitle").textContent=tx("reportTitle");if(!document.getElementById("reportText").hidden)document.getElementById("reportLead").textContent=tx("reportLead");document.getElementById("reportText").placeholder=tx("reportPh");document.getElementById("reportSend").textContent=tx("reportSend");document.getElementById("reportClose").setAttribute("aria-label",tx("close"));
   list.setAttribute("aria-label",tx("list"));document.getElementById("c").setAttribute("aria-label",tx("canvas"));
   for(const b of document.querySelectorAll(".lang button"))b.setAttribute("aria-pressed",String(b.dataset.l===l));
   for(const lb of labels)lb.el.textContent=l==="be"?(lb.be||CITY_BE[lb.n]||lb.n):lb.n;
   buildList();if(bubbleFor)openBubble(bubbleFor);if(selected)renderCard(selected)}
 for(const b of document.querySelectorAll(".lang button"))b.onclick=()=>applyLang(b.dataset.l);
 function select(n,doFly){
+  document.getElementById("reportCard").classList.add("hide");
   selected=n;
   for(const [k,it] of Object.entries(items)){it.uni.uSel.value=k===n?1:0;chips[k]&&chips[k].setAttribute("aria-pressed",k===n)}
   if(!n){card.classList.add("hide");closeBubble();return}
@@ -1006,6 +1025,17 @@ function select(n,doFly){
     flyTo(t,pos)}
 }
 applyLang(LANG);
+const reportCard=document.getElementById("reportCard"),reportText=document.getElementById("reportText");
+let reportAbout="";
+const reportSend=document.getElementById("reportSend"),reportStatus=document.getElementById("reportStatus"),reportLead=document.getElementById("reportLead");
+document.getElementById("report").onclick=()=>{reportAbout=selected?((LANG==="be"?"Адкрыта: ":"Открыто: ")+dname(selected)):"";select(null);setListOpen(false);reportText.hidden=false;reportText.value="";reportSend.hidden=false;reportSend.disabled=false;reportLead.textContent=tx("reportLead");reportStatus.textContent="";reportCard.classList.remove("hide");reportText.focus()};
+document.getElementById("reportClose").onclick=()=>reportCard.classList.add("hide");
+reportCard.onsubmit=async e=>{e.preventDefault();const text=reportText.value.trim();if(!text||reportSend.disabled)return;reportSend.disabled=true;reportStatus.textContent=tx("reportWait");
+  try{const res=await fetch("https://formsubmit.co/ajax/tamarushka777@gmail.com",{method:"POST",headers:{"Content-Type":"application/json",Accept:"application/json"},body:JSON.stringify({_subject:LANG==="be"?"Памылка на карце «Воды Беларусі»":"Ошибка на карте «Воды Беларуси»",_template:"table",_captcha:"false",Сообщение:text.slice(0,2000),"На карте":reportAbout||"—",Страница:location.href.split("#")[0]})});
+    const data=await res.json().catch(()=>null);
+    if(!res.ok||!data||String(data.success)!=="true"){reportStatus.textContent=/activ/i.test(data&&data.message||"")?tx("reportNeed"):tx("reportFail");reportSend.disabled=false;return}
+    reportText.value="";reportText.hidden=true;reportSend.hidden=true;reportLead.textContent=tx("reportDone");reportStatus.textContent=""}
+  catch(err){reportStatus.textContent=tx("reportFail");reportSend.disabled=false}};
 document.getElementById("home").onclick=()=>{select(null);flyTo(HOME.target.clone(),HOME.pos.clone())};
 document.getElementById("refill").onclick=()=>{if(reduce)return;let k=0;for(const it of Object.values(items)){it.uni.uT0.value=T+.2+k*.08;it.pin.t0=it.uni.uT0.value+(it.type==="river"?it.len*.45/it.uni.uSpeed.value:.6)+.15;k++}};
 const ray=new THREE.Raycaster(),ndc=new THREE.Vector2();let down=null;
