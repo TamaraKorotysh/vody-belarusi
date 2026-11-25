@@ -74,6 +74,7 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .city{font-size:15px;font-weight:700;letter-spacing:.1em}
 .city.small{font-size:11.5px;font-weight:500;color:#33414b}
 .city.tiny{font-size:10px;font-weight:500;color:#3e4c55;letter-spacing:.06em}
+.city.mark{font-style:italic;text-transform:none;letter-spacing:.02em;color:#6b5a52}
 .city.micro{font-size:9.5px;font-weight:600;color:#2c3944;letter-spacing:.05em}
 .bubble{position:fixed;left:0;top:0;z-index:3;border:0;border-radius:12px;padding:7px 13px 8px;background:var(--paper);box-shadow:0 10px 24px -10px var(--shadow),0 2px 0 var(--paper2);display:flex;flex-direction:column;align-items:flex-start;gap:0;text-align:left;will-change:transform}
 .bubble::after{content:"";position:absolute;left:50%;bottom:-7px;width:14px;height:14px;background:var(--paper);transform:translateX(-50%) rotate(45deg);border-radius:2px}
@@ -120,7 +121,7 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 <div class="brand paper"><div class="lang" role="group" aria-label="Мова / Язык"><button data-l="be" aria-pressed="true">Бел</button><button data-l="ru" aria-pressed="false">Рус</button></div><h1 id="title">Воды <b>Беларусі</b></h1><p id="hint">Вращайте макет. Нажмите на булавку, затем на название.</p></div>
 <nav class="list paper collapsed" id="list" aria-label="Реки и озёра"><button class="ltog" id="listToggle" aria-expanded="false" aria-controls="listBody"><i class="ic"></i><span id="listLabel">Реки и озёра</span><i class="chev"></i></button><div id="listBody"></div></nav>
 <div class="scale" id="scale" aria-hidden="true"><i></i><span>50 км</span></div>
-<div class="credit" id="credit">Высоты увеличены в 40 раз · Данные: <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap</a>, рельеф: Mapzen / AWS Terrain Tiles</div>
+<div class="credit" id="credit">Высоты увеличены в 20 раз · Данные: <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap</a>, рельеф: Mapzen / AWS Terrain Tiles</div>
 <div class="tools"><button class="paper" id="refill">Наполнить</button><button class="paper" id="home">Весь макет</button><button type="button" class="paper" id="report">Напісаць пра памылку</button></div>
 <article class="card paper hide" id="card" aria-live="polite"></article>
 <form class="card paper hide" id="reportCard">
@@ -151,7 +152,7 @@ for(const a of AUTO)if(!CARDS[a.id]){const b=a.book||null;
     km:b?b.km:a.km,kin:a.kin,basin:b&&b.basin,q:b&&b.q,side:b&&b.side,stats:[],from:["",""],to:["",""],name:"",facts:[]}}
 let LANG="be";try{if(localStorage.getItem("lang")==="ru")LANG="ru"}catch(e){}   // Belarusian unless the viewer chose Russian before
 const TX={
- ru:{credit:"Высоты увеличены в 40 раз · Данные: <a href=\"https://www.openstreetmap.org/copyright\" target=\"_blank\" rel=\"noopener\">© OpenStreetMap</a>, рельеф: Mapzen / AWS Terrain Tiles",doc:"Воды Беларуси",title:"Воды <b>Беларуси</b>",hint:"Вращайте макет. Нажмите на булавку, затем на название.",refill:"Наполнить",home:"Весь макет",
+ ru:{credit:"Высоты увеличены в 20 раз · Данные: <a href=\"https://www.openstreetmap.org/copyright\" target=\"_blank\" rel=\"noopener\">© OpenStreetMap</a>, рельеф: Mapzen / AWS Terrain Tiles",doc:"Воды Беларуси",title:"Воды <b>Беларуси</b>",hint:"Вращайте макет. Нажмите на булавку, затем на название.",refill:"Наполнить",home:"Весь макет",
   search:"Найти реку или озеро",searchAria:"Поиск по названию",list:"Реки и озёра",canvas:"Гранёный макет Беларуси с реками и озёрами",
   src:"Название и факты",wiki:"Википедия",river:"Река",lake:"Озеро",res:"Водохранилище",canal:"Канал",riverL:"река",lakeL:"озеро",resL:"водохранилище",canalL:"канал",g_res:"Водохранилища",g_canal:"Каналы",more:"подробнее ›",route:"Откуда и куда",link:"Связь с реками",hist:"История названия",facts:"Интересные факты",
   close:"Закрыть",other:"по-белорусски: ",g_main:"Главные реки",g_minor:"Притоки",g_lake:"Озёра",g_auto:"Малые реки",
@@ -160,7 +161,7 @@ const TX={
   noteCur:"Цифры сверены с «Блакітнай кнігай Беларусі» (1994). Версии происхождения названий взяты из других источников: в этой книге их нет.",
   noteBook:"Длина, бассейн и расход — по «Блакітнай кнізе Беларусі» (1994). Устье определено по OpenStreetMap.",
   noteOsm:"Длина и устье посчитаны автоматически по данным OpenStreetMap; в «Блакітнай кнізе Беларусі» эту реку найти не удалось."},
- be:{credit:"Вышыні павялічаны ў 40 разоў · Даныя: <a href=\"https://www.openstreetmap.org/copyright\" target=\"_blank\" rel=\"noopener\">© OpenStreetMap</a>, рэльеф: Mapzen / AWS Terrain Tiles",doc:"Воды Беларусі",title:"Воды <b>Беларусі</b>",hint:"Круціце макет. Націсніце на пазнаку, потым на назву.",refill:"Напоўніць",home:"Увесь макет",
+ be:{credit:"Вышыні павялічаны ў 20 разоў · Даныя: <a href=\"https://www.openstreetmap.org/copyright\" target=\"_blank\" rel=\"noopener\">© OpenStreetMap</a>, рэльеф: Mapzen / AWS Terrain Tiles",doc:"Воды Беларусі",title:"Воды <b>Беларусі</b>",hint:"Круціце макет. Націсніце на пазнаку, потым на назву.",refill:"Напоўніць",home:"Увесь макет",
   search:"Знайсці раку або возера",searchAria:"Пошук па назве",list:"Рэкі і азёры",canvas:"Гранёны макет Беларусі з рэкамі і азёрамі",
   src:"Назва і факты",wiki:"Вікіпедыя",river:"Рака",lake:"Возера",res:"Вадасховішча",canal:"Канал",riverL:"рака",lakeL:"возера",resL:"вадасховішча",canalL:"канал",g_res:"Вадасховішчы",g_canal:"Каналы",more:"падрабязней ›",route:"Адкуль і куды",link:"Сувязь з рэкамі",hist:"Гісторыя назвы",facts:"Цікавыя факты",
   close:"Закрыць",other:"па-руску: ",g_main:"Галоўныя рэкі",g_minor:"Прытокі",g_lake:"Азёры",g_auto:"Малыя рэкі",
@@ -262,15 +263,18 @@ scene.add(sky);
 
 // ---------------------------------------------------------------- terrain
 const davyd={x:-7.495,z:26.325,ru:"Давид-Городок",be:"Давыд-Гарадок"};
+// The town is tuned at heights exaggerated 40 times: its absolute levels move with the water when scripts/prep_lp.py uses another scale (L.ys).
+// Only a shift, so the town keeps its own shape: the old Horyn's water level .519 maps as the river water does, y-.23 scaling about .23.
+const DH=L.ys?(.23+(.519-.23)*L.ys/(40/6950))-.519:0;
 const horyn=L.rivers["Горынь"],vetlitsa=L.rivers["Ветлица"],lva=L.rivers["Льва"];
 // The source line joins disjoint reaches with a straight artificial connector.
 const joinedHoryn=horyn.lines[0];
 const oldHoryn=[
-  [-7.94,26.78,14.93,.519],[-7.88,26.72,15.02,.519],
-  [-7.83,26.66,15.12,.519],[-7.77,26.59,15.24,.519],
-  [-7.70,26.55,15.34,.519],
+  [-7.94,26.78,14.93,.519+DH],[-7.88,26.72,15.02,.519+DH],
+  [-7.83,26.66,15.12,.519+DH],[-7.77,26.59,15.24,.519+DH],
+  [-7.70,26.55,15.34,.519+DH],
   ...joinedHoryn.filter(p=>p[2]>=15.41&&p[2]<=16.03),
-  [-7.39,26.02,16.09,.519],
+  [-7.39,26.02,16.09,.519+DH],
 ];
 // The last source points double back at the mouth. End at the
 // Pripyat centerline and let the receiving surface cover the join.
@@ -344,7 +348,7 @@ function nearestSegment(segments,x,z){
 function townGround(x,z,original,influence,channel){
   const bank=THREE.MathUtils.smoothstep(channel.distance,channel.halfWidth*.78,channel.halfWidth+.039);
   const terrace=1-THREE.MathUtils.smoothstep(Math.hypot((x+7.674)/.134,(z-26.328)/.136),.23,1);
-  const localY=.497+bank*(.066+.089*castleHill(x,z)+.030*terrace+.004*(hash(x,z)-.5));
+  const localY=.497+DH+bank*(.066+.089*castleHill(x,z)+.030*terrace+.004*(hash(x,z)-.5));
   return THREE.MathUtils.lerp(original,localY,influence);
 }
 
@@ -385,7 +389,7 @@ for(const step of [.062,.117]){
     const detail=Math.min(shore,landmark);
     const spacing=detail<.073?.062:detail<.146?.117:0;
     if(spacing!==step)continue;
-    P.push(x,townGround(x,z,.563,influence,channel),z);
+    P.push(x,townGround(x,z,.563+DH,influence,channel),z);
     M.push(135);
   }
 }
@@ -394,7 +398,7 @@ for(const [radius,count] of [[0,1],[.34,7],[.70,9],[1,10]]){
   for(let i=0;i<count;i++){
     const angle=(i+radius*.5)*Math.PI*2/count;
     const x=hill.x+Math.cos(angle)*hill.rx*radius,z=hill.z+Math.sin(angle)*hill.rz*radius;
-    P.push(x,townGround(x,z,.563,townInfluence(x,z),nearestSegment(townSegments,x,z)),z);
+    P.push(x,townGround(x,z,.563+DH,townInfluence(x,z),nearestSegment(townSegments,x,z)),z);
     M.push(135);
   }
 }
@@ -415,7 +419,7 @@ for(const [segments,spacing] of [[lowerHorynSegments,.074],[oldHorynSegments,.07
         const offset=side*halfWidth,x=cx-dz/span*offset,z=cz+dx/span*offset;
         const influence=segments===lowerHorynSegments||segments===oldHorynSegments?townInfluence(x,z):0;
         const channel=nearestSegment(influence?townSegments:segments,x,z);
-        const y=influence?townGround(x,z,.563,influence,channel):channelGround(channel,level+.045,reach);
+        const y=influence?townGround(x,z,.563+DH,influence,channel):channelGround(channel,level+.045,reach);
         P.push(x,y,z);
         M.push(135);
       }
@@ -446,7 +450,7 @@ for(let i=1;i<mouthRows.length-1;i++){
 }
 const NP=P.length/3;
 // the terrain triangles are built here rather than shipped: Delaunay over the points, keeping triangles inside the border with no long edges
-const TRI=L.tri||(()=>{const xy=new Float64Array(NP*2);for(let i=0;i<NP;i++){xy[i*2]=P[i*3];xy[i*2+1]=P[i*3+2]}
+let TRI=L.tri||(()=>{const xy=new Float64Array(NP*2);for(let i=0;i<NP;i++){xy[i*2]=P[i*3];xy[i*2+1]=P[i*3+2]}
   const t=new Delaunator(xy).triangles,B=L.border,cs=.2;let x0=1e9,z0=1e9,x1=-1e9,z1=-1e9;for(const [x,z] of B){x0=Math.min(x0,x);z0=Math.min(z0,z);x1=Math.max(x1,x);z1=Math.max(z1,z)}
   const nx=Math.ceil((x1-x0)/cs)+1,nz=Math.ceil((z1-z0)/cs)+1,mask=new Uint8Array(nx*nz);
   for(let j=0;j<nz;j++){const z=z0+(j+.5)*cs,xs=[];for(let i=0,k=B.length-1;i<B.length;k=i++){const [ax,az]=B[i],[bx,bz]=B[k];if((az>z)!==(bz>z))xs.push(ax+(z-az)*(bx-ax)/(bz-az))}
@@ -457,6 +461,14 @@ const TRI=L.tri||(()=>{const xy=new Float64Array(NP*2);for(let i=0;i<NP;i++){xy[
     out.push(t[k],t[k+1],t[k+2])}
   return new Uint32Array(out)})();
 for(let k=0;k<TRI.length;k+=3){const a=TRI[k]*3,b=TRI[k+1]*3,c=TRI[k+2]*3;const up=(P[b+2]-P[a+2])*(P[c]-P[a])-(P[b]-P[a])*(P[c+2]-P[a+2]);if(up<0){const t=TRI[k+1];TRI[k+1]=TRI[k+2];TRI[k+2]=t}}
+// the Mikashevichi quarry: no terrain over the pit, its own terraced mesh fills the hole (prep_lp.py puts the rim points into the terrain)
+const MARKS=L.marks||[],inMark=(x,z,pad=0)=>MARKS.some(mk=>{const r=mk.ring;let x0=1e9,x1=-1e9,z0=1e9,z1=-1e9;for(const [a,b] of r){x0=Math.min(x0,a);x1=Math.max(x1,a);z0=Math.min(z0,b);z1=Math.max(z1,b)}
+  return x>x0-pad&&x<x1+pad&&z>z0-pad&&z<z1+pad&&(inPoly(x,z,r)||pad>0&&r.some(([a,b])=>Math.hypot(a-x,b-z)<pad))});
+{const pits=MARKS.filter(mk=>mk.kind==="quarry");if(pits.length){const keep=[];
+  for(let k=0;k<TRI.length;k+=3){const a=TRI[k]*3,b=TRI[k+1]*3,c=TRI[k+2]*3,cx=(P[a]+P[b]+P[c])/3,cz=(P[a+2]+P[b+2]+P[c+2])/3;
+    const rim=i=>i>=L.pit[0]&&i<L.pit[0]+L.pit[1];   // only triangles spanned by rim points alone lie over the pit
+    if(!(L.pit&&rim(TRI[k])&&rim(TRI[k+1])&&rim(TRI[k+2])&&pits.some(mk=>inPoly(cx,cz,mk.ring))))keep.push(TRI[k],TRI[k+1],TRI[k+2])}
+  TRI=new Uint32Array(keep)}}
 const terrainGeo=(()=>{const pos=new Float32Array(TRI.length*3);for(let k=0;k<TRI.length;k++){const i=TRI[k];pos[k*3]=P[i*3];pos[k*3+1]=P[i*3+1];pos[k*3+2]=P[i*3+2]}
   const g=new THREE.BufferGeometry();g.setAttribute("position",new THREE.BufferAttribute(pos,3));return g})();
 const triM=k=>(L.m[TRI[k*3]]+L.m[TRI[k*3+1]]+L.m[TRI[k*3+2]])/3;
@@ -494,6 +506,18 @@ function heightAt(x,z){const Ls=tgrid.get(Math.floor(x/tcell)+","+Math.floor(z/t
   for(const k of Ls){const i0=TRI[k*3]*3,i1=TRI[k*3+1]*3,i2=TRI[k*3+2]*3,ax=P[i0],az=P[i0+2],bx=P[i1],bz=P[i1+2],cx=P[i2],cz=P[i2+2];
     const d=(bz-cz)*(ax-cx)+(cx-bx)*(az-cz);if(Math.abs(d)<1e-9)continue;const u=((bz-cz)*(x-cx)+(cx-bx)*(z-cz))/d,v=((cz-az)*(x-cx)+(ax-cx)*(z-cz))/d,w=1-u-v;
     if(u>=-1e-4&&v>=-1e-4&&w>=-1e-4)return u*P[i0+1]+v*P[i1+1]+w*P[i2+1]}return null}
+// landmarks from OpenStreetMap outlines: the granite quarry at Mikashevichi (terraced pit, real depth) and the potash salt heaps at Soligorsk
+for(const mk of MARKS){const Q=mk.pts,T=mk.tri,pos=[];
+  for(let k=0;k<T.length;k+=3){const v=[0,1,2].map(j=>{const i=T[k+j]*3,x=Q[i],z=Q[i+2];return [x,mk.kind==="heap"?(heightAt(x,z)??.35)-.012+Q[i+1]:Q[i+1],z]});
+    const up=(v[1][2]-v[0][2])*(v[2][0]-v[0][0])-(v[1][0]-v[0][0])*(v[2][2]-v[0][2]);if(up<0)v.reverse();for(const p of v)pos.push(...p)}
+  const g=new THREE.BufferGeometry();g.setAttribute("position",new THREE.Float32BufferAttribute(pos,3));
+  const paint=mk.kind==="quarry"
+    ?(c,n)=>{const depth=(mk.y0-c.y)/mk.d,key=c.x*41.3+c.z*17.9,h=hash(Math.floor(c.x*90),Math.floor(c.z*90));
+      if(depth>.97&&n.y>.9)return tone(h<.3?"#c47a3c":h<.42?"#d3a050":h<.5?"#7f9c98":"#a29d96",key,.6);   // the floor: grey rubble with rusty puddles
+      return tone(n.y>.8?"#c9c3ba":n.y>.45?"#a29b94":"#8e8781",key,.8)}   // granite: pale benches and haul roads, dark cut walls
+    :(c,n)=>{const key=c.x*37.1+c.z*23.3,h=hash(Math.floor(c.x*60),Math.floor(c.z*60));   // waste salt with clay: salmon pink, paler streaks of fresh salt
+      return tone(h<.22?"#efc3ad":n.y>.75?"#e3a58a":n.x+n.z>0?"#d9947a":"#c98268",key,.7)};
+  const m=meshOf(facet(g,paint),faceted());scene.add(m)}
 // walls: cut earth around the border, in jagged layers
 {
   const B=L.border,BY=L.borderY,n=B.length,tris=[],rows=[0,.45,1.3,2.4,3.8];
@@ -733,14 +757,14 @@ const nearCity=(x,z)=>Math.hypot(x-davyd.x,z-davyd.z)<.39||L.cities.some(([n,cx,
     const x=x0+rnd()*(x1-x0),z=z0+rnd()*(z1-z0),fz=forestN(x,z);
     const dP=Math.hypot(x-PUSHCHA[0],z-PUSHCHA[1]);if(dP<1.6)continue;const inForest=fz>.53||dP<4.5;if(!inForest&&rnd()>.018)continue;
     if(inForest&&dP>=4.5&&rnd()>.3+.7*vn(x*.07+11,z*.07-5))continue;   // thinner patches and glades inside the forests
-    if(!inPoly(x,z,B))continue;const rv=riverNear(x,z);if(rv.d<rv.hw+.9)continue;if(nearCity(x,z)||inLake(x,z))continue;
+    if(!inPoly(x,z,B))continue;const rv=riverNear(x,z);if(rv.d<rv.hw+.9)continue;if(nearCity(x,z)||inLake(x,z)||inMark(x,z,.06))continue;
     const y=heightAt(x,z);if(y==null)continue;
     const polesie=z>13;const kind=inForest?(polesie?(rnd()<.5?"tree":"pine2"):(rnd()<.62?(rnd()<.5?"pine":"pine2"):(rnd()<.2?"ochre":"tree"))):(rnd()<.3?"ochre":"tree");
     place[kind].push([x,y-.03,z,.32+rnd()*.22,rnd()*6.28,(rnd()-.5)*.1]);n++}
-  for(let t=0;t<3000;t++){const x=x0+rnd()*(x1-x0),z=z0+rnd()*(z1-z0);if(!inPoly(x,z,B))continue;const rv=riverNear(x,z);if(!(rv.d>rv.hw+.4&&rv.d<rv.hw+1.4)||rnd()>.25||inLake(x,z))continue;const y=heightAt(x,z);if(y==null)continue;place.rock.push([x,y-.02,z,.25+rnd()*.35,rnd()*6.28,0])}
+  for(let t=0;t<3000;t++){const x=x0+rnd()*(x1-x0),z=z0+rnd()*(z1-z0);if(!inPoly(x,z,B))continue;const rv=riverNear(x,z);if(!(rv.d>rv.hw+.4&&rv.d<rv.hw+1.4)||rnd()>.25||inLake(x,z)||inMark(x,z,.06))continue;const y=heightAt(x,z);if(y==null)continue;place.rock.push([x,y-.02,z,.25+rnd()*.35,rnd()*6.28,0])}
   for(const [nm,cx,cz,r] of L.cities){const count=nm==="Минск"?60:r===1?28:r===2?13:r===3?6:4,spread=nm==="Минск"?2.4:r===1?1.7:r===2?1.15:r===3?.75:.5;
     const batch=[];
-    for(let k=0,tries=0;k<count&&tries<count*40;tries++){   /* a river town may step just past its radius to find a dry bank, but not far enough to meet the next town */const grow=1+tries/(count*8),a=rnd()*6.283,rr=Math.sqrt(rnd())*spread*Math.min(grow,1.15),x=cx+Math.cos(a)*rr,z=cz+Math.sin(a)*rr;const rv=riverNear(x,z);if(rv.d<rv.hw+(r>2?.3:.45)||inLake(x,z))continue;const y=heightAt(x,z);if(y==null)continue;k++;
+    for(let k=0,tries=0;k<count&&tries<count*40;tries++){   /* a river town may step just past its radius to find a dry bank, but not far enough to meet the next town */const grow=1+tries/(count*8),a=rnd()*6.283,rr=Math.sqrt(rnd())*spread*Math.min(grow,1.15),x=cx+Math.cos(a)*rr,z=cz+Math.sin(a)*rr;const rv=riverNear(x,z);if(rv.d<rv.hw+(r>2?.3:.45)||inLake(x,z)||inMark(x,z,.22))continue;const y=heightAt(x,z);if(y==null)continue;k++;
       const kind=(r===1&&rr<spread*.3&&rnd()<.45)?"tower":["house","house2","house3"][Math.floor(rnd()*3)];
       batch.push([kind,x,y-.02,z,kind==="tower"?(.7+rnd()*(nm==="Минск"?1.2:.6)):(r===4?districtHouseScale+rnd()*.12:r===3?.6+rnd()*.2:.8+rnd()*.35),Math.round(rnd()*4)*Math.PI/2+(rnd()-.5)*.3,0])}
     /* houses north of Zhodino stand in the gap toward Borisov, so that group is left out */if(nm==="Жодино"){const north=batch.filter(p=>p[3]<cz-.55);for(const p of north)batch.splice(batch.indexOf(p),1)}
@@ -752,7 +776,7 @@ const nearCity=(x,z)=>Math.hypot(x-davyd.x,z-davyd.z)<.39||L.cities.some(([n,cx,
   // Cross that whole channel, with the deck ends resting on the banks.
   const bridgeX=-7.601,bridgeZ=26.246,bridgeAngle=.647,bridgeLen=.42;
   const bridge=new THREE.Group();
-  bridge.position.set(bridgeX,.571,bridgeZ);
+  bridge.position.set(bridgeX,.571+DH,bridgeZ);
   bridge.rotation.y=-bridgeAngle;
   const bridgeParts=[
     [bridgeLen,.014,.034,0,0,0,"#918575"],
@@ -773,11 +797,11 @@ const nearCity=(x,z)=>Math.hypot(x-davyd.x,z-davyd.z)<.39||L.cities.some(([n,cx,
     const edge=(along,across)=>[bridgeX+along*cos-across*sin,bridgeZ+along*sin+across*cos];
     const top=[-.016,.016].map(across=>{
       const [px,pz]=edge(near,across);
-      return [px,.578,pz];
+      return [px,.578+DH,pz];
     });
     const ground=[-.018,.018].map(across=>{
       const [px,pz]=edge(far,across);
-      return [px,Math.max(heightAt(px,pz)+.003,.567),pz];
+      return [px,Math.max(heightAt(px,pz)+.003,.567+DH),pz];
     });
     const [a,b,c,d]=side>0?[...top,...ground]:[...ground,...top];
     ramps.push(...a,...b,...c,...b,...d,...c);
@@ -788,7 +812,7 @@ const nearCity=(x,z)=>Math.hypot(x-davyd.x,z-davyd.z)<.39||L.cities.some(([n,cx,
   scene.add(bridge);
 
   const plaza=new THREE.Group();
-  plaza.position.set(x+.144,.565,z+.052);
+  plaza.position.set(x+.144,.565+DH,z+.052);
   plaza.rotation.y=-angle;
   scene.add(plaza);
 
@@ -832,7 +856,7 @@ const nearCity=(x,z)=>Math.hypot(x-davyd.x,z-davyd.z)<.39||L.cities.some(([n,cx,
   });
   for(const [dx,dz,scale] of [[.043,-.093,.032],[.143,-.119,.036],[-.103,-.108,.033],[-.166,.146,.034],[.249,.112,.031]]){
     const px=x+dx,pz=z+dz,ground=heightAt(px,pz);
-    if(ground>=.552)place.tree.push([px,ground-.002,pz,scale,hash(px,pz)*6.28,0]);
+    if(ground>=.552+DH)place.tree.push([px,ground-.002,pz,scale,hash(px,pz)*6.28,0]);
   }
 }
 // two bison grazing in a glade of Belovezhskaya Pushcha: a cow and her reddish calf
@@ -936,6 +960,13 @@ for(const [n,x,z,r,be] of cityLabels){
   const lift=n===davyd.ru?.59:r===1?1.6:1.1;
   labels.push({el,r,n,be,pos:new THREE.Vector3(x,(heightAt(x,z)??1)+lift,z)});
 }
+// landmark labels: the quarry, and one for each cluster of salt heaps
+{const groups=[];for(const mk of MARKS){const c=mk.ring.reduce((s,[x,z])=>[s[0]+x/mk.ring.length,s[1]+z/mk.ring.length],[0,0]);
+    const g=mk.kind==="heap"&&groups.find(g=>g.kind==="heap"&&Math.hypot(g.x/g.n-c[0],g.z/g.n-c[1])<1.2);
+    if(g){g.x+=c[0];g.z+=c[1];g.n++}else groups.push({kind:mk.kind,x:c[0],z:c[1],n:1,top:mk.kind==="quarry"?mk.y0:(heightAt(...c)??.4)+mk.h})}
+  for(const g of groups){const x=g.x/g.n,z=g.z/g.n,el=document.createElement("div");el.className="city tiny mark notranslate";el.translate=false;
+    el.textContent=g.kind==="quarry"?(LANG==="be"?"Гранітны кар'ер":"Гранитный карьер"):g.n>1?(LANG==="be"?"Солеадвалы":"Солеотвалы"):(LANG==="be"?"Солеадвал":"Солеотвал");
+    labelsEl.appendChild(el);labels.push({el,r:3,n:el.textContent,pos:new THREE.Vector3(x,g.top+.35,z)})}}
 let camD=150;
 const v3=new THREE.Vector3();
 function placeLabels(){const w=innerWidth,h=innerHeight;for(const l of labels){
