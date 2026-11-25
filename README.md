@@ -23,6 +23,7 @@
     python ../scripts/export_geo.py     # -> geo_ll.json
     python ../scripts/prep3d.py         # -> d3.json
     python ../scripts/prep_lp.py        # рельеф и вода -> lp.json
+                                        # (ширина рек как на физической карте; scripts/mouths.py доводит каждый приток до середины реки или озера, куда он впадает)
     python ../scripts/build_lp.py       # -> ../vody-belarusi.html
 
 Если менялись только тексты карточек или `lp_template.html`, достаточно `build_lp.py`.

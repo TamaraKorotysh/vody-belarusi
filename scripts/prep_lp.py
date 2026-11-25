@@ -31,10 +31,32 @@ def resample(ring, step, closed=True):
     return np.c_[np.interp(s, L, ring[:, 0]), np.interp(s, L, ring[:, 1])]
 
 rng = np.random.default_rng(5)
-# ---- rivers: half widths, water level that only goes downhill
-RW = {n: r["w"] for n, r in D["rivers"].items()}
-AUTO = set(r["id"] for r in json.load(open("rivers_auto.json", encoding="utf8"))) if __import__("os").path.exists("rivers_auto.json") else set()
-def half(n, d, Dl): return RW[n] * (.45 + .55 * min(1, d / Dl)) * .3
+# ---- rivers: widths as on a physical map of Belarus, water level that only goes downhill
+# 1 map unit = 6.95 km. Full width at the mouth: Dnieper about 2.2 km, the other big rivers 1.4-1.9 km, their main tributaries
+# 0.6-1.1 km, small rivers 0.3-0.7 km by length (a map line, not the real 50-400 m, which would be invisible on the overview).
+import os, sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from mouths import lead_into
+AUTO = set(r["id"] for r in json.load(open("rivers_auto.json", encoding="utf8"))) if os.path.exists("rivers_auto.json") else set()
+# the lower Horyn at Davyd-Haradok with the Vetlitsa and the Lva is drawn by hand in lp_template.html from these exact lines: leave them as they are
+KEEP = {"Горынь", "Ветлица", "Льва"}
+MOUTH_OF = lead_into(D["rivers"], D["lakes"], D["border"], skip=KEEP)     # every other tributary now reaches the middle of its recipient
+KM = 6.95
+def full_km(n, r):
+    if n in AUTO: return float(np.clip(.22 + .029 * r["D"], .28, .7))
+    if r["w"] < .29: return .4                                   # canals
+    return .42 + (r["w"] - .3) * 1.87
+HM = {n: full_km(n, r) / KM / 2 for n, r in D["rivers"].items()}   # half width at the mouth, map units
+HMIN = .016                                                     # narrowest water: about 220 m across
+def taper(d, Dl): return .35 + .65 * min(1, d / Dl)
+def half(n, d, Dl): return max(HMIN, HM[n] * taper(d, Dl))
+# a tributary's mouth is narrower than the river it flows into
+for n, (t, kind) in MOUTH_OF.items():
+    if kind != "river": continue
+    e = np.array(D["rivers"][n]["lines"][max(range(len(D["rivers"][n]["lines"])), key=lambda i: D["rivers"][n]["lines"][i][-1][2])][-1][:2])
+    pts = [p for l in D["rivers"][t]["lines"] for p in l]; q = min(pts, key=lambda p: (p[0] - e[0]) ** 2 + (p[1] - e[1]) ** 2)
+    rec = half(t, q[2], D["rivers"][t]["D"])
+    HM[n] = max(HM[n] * .6, min(HM[n], .7 * rec))
 rivers_out = {}; cpts = []; cinfo = []   # channel centre points for distance queries
 for n, r in D["rivers"].items():
     lines = []
@@ -44,9 +66,30 @@ for n, r in D["rivers"].items():
         y = np.minimum.accumulate(y)                   # never flows uphill
         for _ in range(4): y = np.r_[y[0], (y[:-2] + y[1:-1] + y[2:]) / 3, y[-1]]
         lines.append(np.c_[a, y])
-        for (x, z, d, yy) in np.c_[a, y]:
+    rivers_out[n] = {"lines": lines}
+# at the mouth the tributary's water comes down to its recipient's level (a lake's surface or the river's water there)
+LAKE_LVL = {}
+for n, polys in D["lakes"].items():
+    outer = np.array(polys[0][0], float); LAKE_LVL[n] = float(np.percentile(yof(meters(outer[:, 0], outer[:, 1])), 25)) - 0.05
+for n in sorted(MOUTH_OF, key=lambda k: -D["rivers"][k]["D"]):
+    t, kind = MOUTH_OF[n]; Ls = rivers_out[n]["lines"]; li = max(range(len(Ls)), key=lambda i: Ls[i][-1, 2]); a = Ls[li]
+    if kind == "lake": ty = LAKE_LVL[t] + .01
+    else:
+        q = np.vstack(rivers_out[t]["lines"]); ty = q[np.argmin((q[:, 0] - a[-1, 0]) ** 2 + (q[:, 1] - a[-1, 1]) ** 2), 3] + .005
+    k = np.arange(len(a))[::-1]                        # points back from the mouth
+    a[:, 3] = np.minimum(a[:, 3], ty + k * .012)       # eases down over the last stretch, never a step
+for n, r in D["rivers"].items():
+    lines = rivers_out[n]["lines"]
+    for a in lines:
+        # distance queries need the centre line, not just its vertices 1 km apart: the channels are only a few hundred metres wide
+        L = np.r_[0, np.cumsum(np.hypot(*np.diff(a[:, :2], axis=0).T))]
+        s = np.arange(0, L[-1] + 1e-9, .02) if L[-1] > 0 else np.array([0.])
+        fine = np.c_[[np.interp(s, L, a[:, c]) for c in range(4)]].T
+        for (x, z, d, yy) in fine:
             cpts.append((x, z)); cinfo.append((half(n, d, r["D"]), yy))
-    rivers_out[n] = {"w": r["w"], "D": r["D"], "lines": [[[round(v, 3) for v in p] for p in l] for l in lines]}
+    rivers_out[n] = {"w": r["w"], "hm": round(HM[n], 4), "D": round(max(l[-1, 2] for l in lines), 3),
+                     "lines": [[[round(v, 3) for v in p] for p in l] for l in lines]}
+    r["D"] = rivers_out[n]["D"]
 cpts = np.array(cpts); cinfo = np.array(cinfo); ctree = cKDTree(cpts)
 
 # ---- lakes: level and shore
@@ -64,7 +107,7 @@ gx, gz = np.meshgrid(np.arange(bx.min() - 1, bx.max() + 1, SP), np.arange(bz.min
 gx = gx + (np.arange(gx.shape[0])[:, None] % 2) * SP / 2
 P = np.c_[gx.ravel(), gz.ravel()] + rng.uniform(-0.3, 0.3, (gx.size, 2)) * SP
 dist, ci = ctree.query(P)
-P = P[dist > cinfo[ci, 0] + .32]                     # channels get their own points: keep clear of each river by its own width
+P = P[dist > cinfo[ci, 0] + .24]                     # channels get their own points: keep clear of each river by its own width
 P = P[inside(P[:, 0], P[:, 1])]
 pts.append(P)
 # denser band around rivers
@@ -77,7 +120,7 @@ for n, r in rivers_out.items():
             tx, tz = p1[0] - p0[0], p1[1] - p0[1]; L = math.hypot(tx, tz) or 1; tx /= L; tz /= L
             hw = half(n, d, r["D"])
             if k % 2 == 0:
-                for off in ((0, -(hw + .16), hw + .16, -(hw + .6), hw + .6) if n not in AUTO else (0, -(hw + .14), hw + .14)):
+                for off in (0, -(hw + .025), hw + .025) + ((-(hw + .13), hw + .13) if k % 4 == 0 else ()):   # bed, the bank right at the water's edge, the valley side
                     pts.append(np.array([[x - tz * off, z + tx * off]]))
 pts.append(resample(border, 0.7))
 for ring, lvl, holes in lake_polys:
@@ -92,12 +135,13 @@ print("points", len(P))
 # ---- heights
 m = meters(P[:, 0], P[:, 1]); y = yof(m)
 d, idx = ctree.query(P); hw = cinfo[idx, 0]; wl = cinfo[idx, 1]
-bank = wl + 0.1
-t = np.clip((d - hw * 0.6) / (hw + .65 - hw * 0.6), 0, 1); t = t * t * (3 - 2 * t)
-carved = np.where(d < hw * 0.6, wl - 0.22, (wl - 0.22) * (1 - t) + np.maximum(y, bank) * t)
-near = d < hw + .7
-y = np.where(near, np.minimum(np.maximum(carved, np.where(d > hw + .2, bank, -9)), np.maximum(y, bank)), y)
-y = np.where((d > hw + .08) & (d < hw + .3), np.maximum(y, wl + 0.06), y)   # banks start beyond the drawn ribbon (its half-width is hw + .06)
+bank = wl + 0.06
+E = hw + .012                                        # edge of the drawn water ribbon (see lp_template.html)
+t = np.clip((d - E) / .4, 0, 1); t = t * t * (3 - 2 * t)
+carved = np.where(d < hw * 0.6, wl - 0.22, bank * (1 - t) + np.maximum(y, bank) * t)
+near = d < E + .45
+y = np.where(near, np.minimum(np.maximum(carved, np.where(d > E + .008, bank, -9)), np.maximum(y, bank)), y)
+y = np.where((d > E + .008) & (d < hw + .2), np.maximum(y, bank), y)   # banks start right beyond the ribbon
 y = np.where(d < hw * 0.6, wl - 0.22, y)
 for ring, lvl, holes in lake_polys:
     ins = inside(P[:, 0], P[:, 1], ring[:, 0], ring[:, 1])
@@ -106,7 +150,7 @@ for ring, lvl, holes in lake_polys:
     sd = cKDTree(ring).query(P)[0]; shore = (~ins) & (sd < 0.05); y[shore] = np.maximum(lvl + 0.06, np.minimum(y[shore], lvl + 0.25))
 # last word: under a river's ribbon the ground is always below its water, even where a lake bowl or shore lifted it
 y = np.where(d < hw * 0.6, np.minimum(y, wl - 0.22), y)
-y = np.where(d < hw + .08, np.minimum(y, wl - 0.03), y)
+y = np.where(d < E, np.minimum(y, wl - 0.03), y)
 
 tri = Delaunay(P).simplices
 c = P[tri].mean(axis=1)
