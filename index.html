@@ -1370,13 +1370,37 @@ function treeGeo(seed,colour){const parts=[],trunk=new THREE.CylinderGeometry(.0
     parts.push(facet(g,(c,n)=>tone(colour,c.x*13+c.y*7+c.z*3+seed,1.2).multiplyScalar(.92+.14*n.y)))});return merge(parts)}
 function rockGeo(seed){const g=jitter(new THREE.IcosahedronGeometry(.5,1),.11,seed);g.scale(1.15,.72,.9);const p=g.attributes.position;for(let i=0;i<p.count;i++)if(p.getY(i)<-.12)p.setY(i,-.12);
   return facet(g,(c,n)=>tone(n.y>.55?PAL.rock:"#857a8c",c.x*31+c.y*17+c.z*7+seed))}
-function houseGeo(seed,roof){const body=new THREE.BoxGeometry(.5,.36,.4);body.translate(0,.18,0);
-  const rf=new THREE.CylinderGeometry(.34,.34,.56,3,1);rf.rotateZ(Math.PI/2);rf.rotateX(-Math.PI/2);rf.rotateY(Math.PI/2);rf.scale(1,.55,.72);rf.translate(0,.45,0);   // ridge up
-  return merge([facet(body,(c,n)=>tone(PAL.wall,c.x*9+c.z*3+seed,.8).multiplyScalar(n.y>.5?1:.97)),facet(rf,c=>tone(roof,c.x*7+c.y*5+seed,.9))])}
+// Buildings are modelled at a unit size and then shrunk to map size (about 0.1 unit = 700 m across, still far larger than life,
+// but small enough not to hide the Mikashevichi quarry or the Soligorsk salt heaps). shrink() scales aCen too, so it stays the triangle centre.
+const HOUSE_K=.27;
+function shrink(g,k){for(const name of ["position","aCen"]){const a=g.attributes[name].array;for(let i=0;i<a.length;i++)a[i]*=k}return g}
+// a log house (изба): low walls under a steep gable roof, with a brick chimney
+function houseGeo(seed,roof){const body=new THREE.BoxGeometry(.5,.32,.4);body.translate(0,.16,0);
+  const rf=new THREE.CylinderGeometry(.34,.34,.56,3,1);rf.rotateZ(Math.PI/2);rf.rotateX(-Math.PI/2);rf.rotateY(Math.PI/2);rf.scale(1,.62,.72);rf.translate(0,.42,0);   // ridge up
+  const ch=new THREE.BoxGeometry(.06,.16,.06);ch.translate(.13,.56,.07);
+  return shrink(merge([facet(body,(c,n)=>tone("#e8c79c",c.x*9+c.z*3+seed,.8).multiplyScalar(n.y>.5?1:.95)),facet(rf,c=>tone(roof,c.x*7+c.y*5+seed,.9)),facet(ch,()=>tone("#9a4a38",seed,.5))]),HOUSE_K)}
+// a two-storey house under a hipped roof, the upper floor's windows a darker band
+function villaGeo(seed,roof){const body=new THREE.BoxGeometry(.52,.5,.42,1,4,1);body.translate(0,.25,0);
+  const rf=new THREE.ConeGeometry(Math.SQRT2,1,4);rf.rotateY(Math.PI/4);rf.scale(.31,.26,.26);rf.translate(0,.63,0);
+  return shrink(merge([facet(body,(c,n)=>{const band=Math.abs(n.y)<.5&&(Math.floor(c.y/.125)%2===1);return tone(band?"#c9cfd4":PAL.wall,c.x*9+c.z*3+seed,.7).multiplyScalar(band?.85:n.y>.5?1:.97)}),
+    facet(rf,c=>tone(roof,c.x*7+c.z*5+seed,.9))]),HOUSE_K)}
+// a five-storey panel block: ribbon windows on every floor and a flat roof with a parapet
+function blockGeo(seed){const F=5,fh=.17,body=new THREE.BoxGeometry(.9,F*fh,.34,1,F*2,1);body.translate(0,F*fh/2,0);
+  const top=new THREE.BoxGeometry(.94,.04,.38);top.translate(0,F*fh+.02,0);
+  return shrink(merge([facet(body,(c,n)=>{const win=Math.abs(n.y)<.5&&(Math.floor(c.y/(fh/2))%2===1);return tone(win?"#7f97a8":"#ece4d6",c.y*11+c.x*3+seed,.5)}),
+    facet(top,()=>tone("#8c8a8f",seed,.4))]),HOUSE_K)}
 function towerGeo(seed){const b=new THREE.BoxGeometry(.42,1,.42);b.translate(0,.5,0);const t=new THREE.ConeGeometry(.32,.3,4);t.rotateY(Math.PI/4);t.translate(0,1.15,0);
-  return merge([facet(b,c=>tone("#f4efe6",c.y*11+seed,.6)),facet(t,c=>tone(PAL.accent,c.y*7+seed,.6))])}
-const kinds={pine:pineGeo(1),pine2:pineGeo(2,.8),tree:treeGeo(3,PAL.leaf),ochre:treeGeo(4,PAL.ochre),rock:rockGeo(5),house:houseGeo(1,PAL.roof),house2:houseGeo(2,PAL.roof2),house3:houseGeo(3,PAL.roof3),tower:towerGeo(4)};
-const place={pine:[],pine2:[],tree:[],ochre:[],rock:[],house:[],house2:[],house3:[],tower:[]};
+  return shrink(merge([facet(b,c=>tone("#f4efe6",c.y*11+seed,.6)),facet(t,c=>tone(PAL.accent,c.y*7+seed,.6))]),HOUSE_K)}
+const kinds={pine:pineGeo(1),pine2:pineGeo(2,.8),tree:treeGeo(3,PAL.leaf),ochre:treeGeo(4,PAL.ochre),rock:rockGeo(5),house:houseGeo(1,PAL.roof),house2:houseGeo(2,PAL.roof2),house3:houseGeo(3,PAL.roof3),
+  villa:villaGeo(5,PAL.roof2),villa2:villaGeo(6,"#7d6a63"),block:blockGeo(7),tower:towerGeo(4)};
+const place={pine:[],pine2:[],tree:[],ochre:[],rock:[],house:[],house2:[],house3:[],villa:[],villa2:[],block:[],tower:[]};
+// footprint radius of each building at instance scale 1: half the diagonal of its widest part (roof overhang included)
+const footR={house:Math.hypot(.28,.25)*HOUSE_K,house2:Math.hypot(.28,.25)*HOUSE_K,house3:Math.hypot(.28,.25)*HOUSE_K,villa:Math.hypot(.31,.26)*HOUSE_K,villa2:Math.hypot(.31,.26)*HOUSE_K,
+  block:Math.hypot(.47,.19)*HOUSE_K,tower:Math.hypot(.21,.21)*HOUSE_K};
+// every placed building goes into a coarse grid, so a new one is checked only against its neighbours
+const BCELL=.35,builtGrid=new Map();
+const roomFor=(x,z,rad)=>{const a0=Math.floor(x/BCELL),b0=Math.floor(z/BCELL);for(let a=a0-1;a<=a0+1;a++)for(let b=b0-1;b<=b0+1;b++)for(const [px,pz,pr] of builtGrid.get(a*100003+b)||[])if(Math.hypot(px-x,pz-z)<pr+rad+.012)return false;return true};
+const claim=(x,z,rad)=>{const key=Math.floor(x/BCELL)*100003+Math.floor(z/BCELL);if(!builtGrid.has(key))builtGrid.set(key,[]);builtGrid.get(key).push([x,z,rad])};
 const lakePolys=Object.values(L.lakes).map(lk=>lk.level);
 const PUSHCHA=[-38.2,16.6];   // Belovezhskaya Pushcha (23.88 E, 52.65 N)
 // lakes and reservoirs as a coarse mask (their water triangles marked on a grid), so nothing is placed in the water
@@ -1385,7 +1409,11 @@ for(const lk of Object.values(L.lakes)){const Q=lk.pts,T=lk.tri;
   for(let k=0;k<T.length;k+=3){let x0=1e9,x1=-1e9,z0=1e9,z1=-1e9;for(let v=0;v<3;v++){const i=T[k+v]*2;x0=Math.min(x0,Q[i]);x1=Math.max(x1,Q[i]);z0=Math.min(z0,Q[i+1]);z1=Math.max(z1,Q[i+1])}
     for(let a=Math.floor(x0/LCELL)-1;a<=Math.floor(x1/LCELL)+1;a++)for(let b=Math.floor(z0/LCELL)-1;b<=Math.floor(z1/LCELL)+1;b++)lakeMask.add(a*100003+b)}}
 const inLake=(x,z)=>lakeMask.has(Math.floor(x/LCELL)*100003+Math.floor(z/LCELL));
-const districtHouseScale=.42;
+const townKind=(r,t)=>{const u=rnd(),tower=r===1&&t<.3?.22:0,block=r===1?.62-.5*t:r===2?.4-.32*t:r===3&&t<.5?.15:0,villa=r===4?.2:.3;   // panel blocks crowd the centres of big towns
+  return u<tower?"tower":u<tower+block?"block":u<tower+block+villa?(rnd()<.5?"villa":"villa2"):["house","house2","house3"][Math.floor(rnd()*3)]};
+const townScale=(kind,r,minsk)=>kind==="tower"?.6+rnd()*(minsk?.9:.5):r===4?.85+rnd()*.12:r===3?.95+rnd()*.15:1+rnd()*.2;
+// lowest ground under a building's footprint, so on a slope no corner hangs in the air
+const groundUnder=(x,z,rad)=>{let y=heightAt(x,z);if(y==null)return null;const d=rad*.7;for(const [a,b] of [[d,d],[-d,d],[d,-d],[-d,-d]]){const h=heightAt(x+a,z+b);if(h!=null)y=Math.min(y,h)}return y-.004};
 const nearCity=(x,z)=>Math.hypot(x-davyd.x,z-davyd.z)<.39||L.cities.some(([n,cx,cz,r])=>Math.hypot(x-cx,z-cz)<(n==="Минск"?2.6:r===1?1.9:r===4?.8:1.3));
 {
   const B=L.border;let x0=1e9,x1=-1e9,z0=1e9,z1=-1e9;for(const [x,z] of B){x0=Math.min(x0,x);x1=Math.max(x1,x);z0=Math.min(z0,z);z1=Math.max(z1,z)}
@@ -1399,13 +1427,14 @@ const nearCity=(x,z)=>Math.hypot(x-davyd.x,z-davyd.z)<.39||L.cities.some(([n,cx,
     const polesie=z>13;const kind=inForest?(polesie?(rnd()<.5?"tree":"pine2"):(rnd()<.62?(rnd()<.5?"pine":"pine2"):(rnd()<.2?"ochre":"tree"))):(rnd()<.3?"ochre":"tree");
     place[kind].push([x,y-.03,z,.32+rnd()*.22,rnd()*6.28,(rnd()-.5)*.1]);n++}
   for(let t=0;t<3000;t++){const x=x0+rnd()*(x1-x0),z=z0+rnd()*(z1-z0);if(!inPoly(x,z,B))continue;const rv=riverNear(x,z);if(!(rv.d>rv.hw+.4&&rv.d<rv.hw+1.4)||rnd()>.25||inLake(x,z)||inMark(x,z,.06))continue;const y=heightAt(x,z);if(y==null)continue;place.rock.push([x,y-.02,z,.25+rnd()*.35,rnd()*6.28,0])}
-  for(const [nm,cx,cz,r] of L.cities){const count=nm==="Минск"?60:r===1?28:r===2?13:r===3?6:4,spread=nm==="Минск"?2.4:r===1?1.7:r===2?1.15:r===3?.75:.5;
-    const batch=[];
-    for(let k=0,tries=0;k<count&&tries<count*40;tries++){   /* a river town may step just past its radius to find a dry bank, but not far enough to meet the next town */const grow=1+tries/(count*8),a=rnd()*6.283,rr=Math.sqrt(rnd())*spread*Math.min(grow,1.15),x=cx+Math.cos(a)*rr,z=cz+Math.sin(a)*rr;const rv=riverNear(x,z);if(rv.d<rv.hw+(r>2?.3:.45)||inLake(x,z)||inMark(x,z,.22))continue;const y=heightAt(x,z);if(y==null)continue;k++;
-      const kind=(r===1&&rr<spread*.3&&rnd()<.45)?"tower":["house","house2","house3"][Math.floor(rnd()*3)];
-      batch.push([kind,x,y-.02,z,kind==="tower"?(.7+rnd()*(nm==="Минск"?1.2:.6)):(r===4?districtHouseScale+rnd()*.12:r===3?.6+rnd()*.2:.8+rnd()*.35),Math.round(rnd()*4)*Math.PI/2+(rnd()-.5)*.3,0])}
-    /* houses north of Zhodino stand in the gap toward Borisov, so that group is left out */if(nm==="Жодино"){const north=batch.filter(p=>p[3]<cz-.55);for(const p of north)batch.splice(batch.indexOf(p),1)}
-    for(const [kind,x,y,z,s,rot,tilt] of batch)place[kind].push([x,y,z,s,rot,tilt])}
+  for(const [nm,cx,cz,r] of L.cities){const minsk=nm==="Минск",count=minsk?130:r===1?55:r===2?26:r===3?11:6,spread=minsk?2.4:r===1?1.7:r===2?1.15:r===3?.75:.5;
+    for(let k=0,tries=0;k<count&&tries<count*60;tries++){   /* a river town may step just past its radius to find a dry bank, but not far enough to meet the next town */
+      const grow=1+tries/(count*8),a=rnd()*6.283,rr=Math.sqrt(rnd())*spread*Math.min(grow,1.15),x=cx+Math.cos(a)*rr,z=cz+Math.sin(a)*rr;
+      if(nm==="Жодино"&&z<cz-.55)continue;   // north of Zhodino lies the gap toward Borisov
+      const rv=riverNear(x,z);if(rv.d<rv.hw+(r>2?.3:.45)||inLake(x,z)||inMark(x,z,.22))continue;
+      const kind=townKind(r,rr/spread),s=townScale(kind,r,minsk),rad=footR[kind]*(kind==="tower"?1:s);
+      if(!roomFor(x,z,rad))continue;const y=groundUnder(x,z,rad);if(y==null)continue;k++;claim(x,z,rad);
+      place[kind].push([x,y,z,s,Math.round(rnd()*4)*Math.PI/2+(rnd()-.5)*.3,0])}}
 }
 {
   const {x,z}=davyd,angle=.36;
@@ -1488,8 +1517,9 @@ const nearCity=(x,z)=>Math.hypot(x-davyd.x,z-davyd.z)<.39||L.cities.some(([n,cx,
   const roofs=["house","house2","house3"];
   const homes=[[.36,-.24],[.57,.02],[.43,.34],[-.54,.07]];
   homes.forEach(([dx,dz],i)=>{
-    const px=x+dx,pz=z+dz,scale=districtHouseScale+hash(i,9)*.12;
-    place[roofs[i%3]].push([px,heightAt(px,pz)-.01,pz,scale,(i-.8)*.27,0]);
+    const px=x+dx,pz=z+dz,kind=roofs[i%3],scale=.9+hash(i,9)*.12,rad=footR[kind]*scale;
+    if(!roomFor(px,pz,rad))return;claim(px,pz,rad);
+    place[kind].push([px,groundUnder(px,pz,rad),pz,scale,(i-.8)*.27,0]);
   });
   for(const [dx,dz,scale] of [[.043,-.093,.032],[.143,-.119,.036],[-.103,-.108,.033],[-.166,.146,.034],[.249,.112,.031]]){
     const px=x+dx,pz=z+dz,ground=heightAt(px,pz);
