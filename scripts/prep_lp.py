@@ -4,8 +4,8 @@ from scipy.spatial import Delaunay, cKDTree
 
 D = json.load(open("d3.json", encoding="utf8"))
 G = D["grid"]; nx, nz = G["nx"], G["nz"]; H = np.array(G["h"], dtype=np.float32).reshape(nz, nx)
-# 1 map unit ≈ 6.95 km, so YS = 40 / 6950 exaggerates heights about 40 times
-YS, BASE = 40 / 6950, 0.35
+# 1 map unit ≈ 6.95 km, so YS = 20 / 6950 exaggerates heights 20 times (lp_template.html reads it back as L.ys)
+YS, BASE = 20 / 6950, 0.35
 def meters(x, z):
     fx = (np.asarray(x) - G["x0"]) / G["step"]; fz = (np.asarray(z) - G["z0"]) / G["step"]
     i = np.clip(np.floor(fx).astype(int), 0, nx - 2); j = np.clip(np.floor(fz).astype(int), 0, nz - 2)
@@ -31,6 +31,16 @@ def resample(ring, step, closed=True):
     return np.c_[np.interp(s, L, ring[:, 0]), np.interp(s, L, ring[:, 1])]
 
 rng = np.random.default_rng(5)
+
+# ---- landmarks (data/landmarks.json, from scripts/fetch_landmarks.py): the Mikashevichi granite quarry, the Soligorsk salt heaps
+def proj(lon, lat): K, CX, CY = 16, 28.0, 53.7; return ((lon - CX) * math.cos(math.radians(CY)) * K, (CY - lat) * K)
+import os
+LM = json.load(open("landmarks.json", encoding="utf8")) if os.path.exists("landmarks.json") else {"marks": []}
+if LM.get("town") and not any(c[0] == LM["town"][0] for c in D["cities"]):
+    n_, lon_, lat_, be_ = LM["town"]; D["cities"].append([n_, *[round(v, 2) for v in proj(lon_, lat_)], 3, be_])
+for mk in LM["marks"]:
+    mk["xz"] = np.array([proj(lo, la) for lo, la in mk["ring"]])
+    mk["rim"] = resample(mk["xz"], .02 if mk["kind"] == "quarry" else .015)
 # ---- rivers: widths as on a physical map of Belarus, water level that only goes downhill
 # 1 map unit = 6.95 km. Full width at the mouth: Dnieper about 2.2 km, the other big rivers 1.4-1.9 km, their main tributaries
 # 0.6-1.1 km, small rivers 0.3-0.7 km by length (a map line, not the real 50-400 m, which would be invisible on the overview).
@@ -126,9 +136,14 @@ pts.append(resample(border, 0.7))
 for ring, lvl, holes in lake_polys:
     pts.append(resample(ring, 0.45));
     for h in holes: pts.append(resample(h, 0.45))
+for mk in LM["marks"]:
+    if mk["kind"] != "quarry": continue
+    for i, a in enumerate(pts): pts[i] = a[~inside(a[:, 0], a[:, 1], mk["xz"][:, 0], mk["xz"][:, 1]) & (cKDTree(mk["rim"]).query(a)[0] > .03)]
 P = np.vstack(pts)
 # drop exact duplicates / near-duplicates
 _, keep = np.unique(np.round(P / 0.12).astype(int), axis=0, return_index=True); P = P[np.sort(keep)]
+QRIM = [mk["rim"] for mk in LM["marks"] if mk["kind"] == "quarry"]   # the quarry rim exactly: the template cuts the terrain there and fits the pit in
+if QRIM: P = np.vstack([P] + QRIM)
 P = P[inside(P[:, 0], P[:, 1]) | (cKDTree(border).query(P)[0] < 0.05)]
 print("points", len(P))
 
@@ -152,6 +167,61 @@ for ring, lvl, holes in lake_polys:
 y = np.where(d < hw * 0.6, np.minimum(y, wl - 0.22), y)
 y = np.where(d < E, np.minimum(y, wl - 0.03), y)
 
+# ---- landmark meshes, built on iso-distance contours inside the outline: a terraced pit and salt heaps.
+# The pit has absolute heights; a heap has heights above the ground, the template adds the terrain under it.
+def contour(ring, d, step):
+    """points about d inside the outline: the dense edge pushed inward along its normals, kept where the true distance is d"""
+    e = resample(ring, step * .5); t = np.roll(e, -1, axis=0) - np.roll(e, 1, axis=0); nrm = np.c_[-t[:, 1], t[:, 0]]
+    nrm /= np.linalg.norm(nrm, axis=1, keepdims=True) + 1e-12
+    out = []
+    for sgn in (1, -1):
+        q = e + sgn * d * nrm; ok = inside(q[:, 0], q[:, 1], ring[:, 0], ring[:, 1])
+        if ok.mean() > .5: out = q[ok]; break
+    if not len(out): return np.zeros((0, 2))
+    dd = cKDTree(resample(ring, .003)).query(out)[0]; out = out[np.abs(dd - d) < .2 * d + .002]
+    if len(out) < 3: return np.zeros((0, 2))
+    keep = [0]                                                  # thin to the step
+    tr = cKDTree(out); taken = np.zeros(len(out), bool); taken[0] = True
+    for i in range(1, len(out)):
+        if not any(taken[j] for j in tr.query_ball_point(out[i], step * .8)): taken[i] = True
+    return out[taken]
+marks_out = []; PIT = []
+for mk in LM["marks"]:
+    ring, rim = mk["xz"], mk["rim"]; HM_ = mk["m"] * YS; edge = cKDTree(resample(ring, .003))
+    if mk["kind"] == "quarry":
+        # an amphitheatre of benches down to a floor 800 m in: seven benches about 100 m wide with short walls between them;
+        # the depth (about 150 m) is exaggerated only 5 times here, the relief's 20 would make it a shaft
+        NB, W, A = 7, .0143, .0045; HM_ = mk["m"] * 5 / 6950
+        lv = [(0., 0.)] + [lev for k in range(NB) for lev in ((k * W + A, (k + 1) / NB), ((k + 1) * W, (k + 1) / NB))][:-1]
+    else:
+        lv = [(0., 0.)]                                          # a heap is a pile: straight slopes up to a sharp crest along its middle
+    rings_ = [(rim, 0.)] + [(contour(ring, d, .007), f) for d, f in lv[1:]]
+    x0, z0 = ring.min(axis=0); x1, z1 = ring.max(axis=0); sp = .018
+    gx, gz = np.meshgrid(np.arange(x0, x1, sp), np.arange(z0, z1, sp * .866)); gx = gx + (np.arange(gx.shape[0])[:, None] % 2) * sp / 2
+    ip = np.c_[gx.ravel(), gz.ravel()] + rng.uniform(-.2, .2, (gx.size, 2)) * sp
+    if mk["kind"] == "heap": sp = .011
+    if mk["kind"] == "heap":
+        gx, gz = np.meshgrid(np.arange(x0, x1, sp), np.arange(z0, z1, sp * .866)); gx = gx + (np.arange(gx.shape[0])[:, None] % 2) * sp / 2
+        ip = np.c_[gx.ravel(), gz.ravel()] + rng.uniform(-.2, .2, (gx.size, 2)) * sp
+    ip = ip[inside(ip[:, 0], ip[:, 1], ring[:, 0], ring[:, 1])]; ip = ip[edge.query(ip)[0] > lv[-1][0] + .008]
+    Q = np.vstack([r for r, f in rings_] + [ip]); F = np.concatenate([np.full(len(r), f) for r, f in rings_] + [np.full(len(ip), 1.)])
+    tr = Delaunay(Q).simplices; cc = Q[tr].mean(axis=1); tr = tr[inside(cc[:, 0], cc[:, 1], ring[:, 0], ring[:, 1])]
+    if mk["kind"] == "quarry":
+        ry = yof(meters(rim[:, 0], rim[:, 1])); _, ni = cKDTree(rim).query(Q, k=8); base = ry[ni].mean(axis=1); base[:len(rim)] = ry
+        yy = base - F * HM_; PIT.append(ry)
+        marks_out.append({"kind": "quarry", "ru": mk["ru"], "be": mk["be"], "ring": np.round(ring, 3).tolist(), "y0": round(float(ry.mean()), 3), "d": round(HM_, 3),
+                          "pts": np.round(np.c_[Q[:, 0], yy, Q[:, 1]], 3).ravel().tolist(), "tri": tr.ravel().tolist()})
+    else:
+        dq = edge.query(Q)[0]; dq[:len(rim)] = 0; top = dq.max()
+        # the crest rises and dips into a few peaks along the ridge, as the stackers pour them
+        peak = .8 + .2 * np.cos(Q[:, 0] * 41 + 1.3) * np.cos(Q[:, 1] * 37 + .4)
+        hh = HM_ * np.minimum(dq / (top * .92), 1) * peak
+        marks_out.append({"kind": "heap", "ru": mk["ru"], "be": mk["be"], "ring": np.round(ring, 3).tolist(), "h": round(HM_, 3),
+                          "pts": np.round(np.c_[Q[:, 0], hh, Q[:, 1]], 3).ravel().tolist(), "tri": tr.ravel().tolist()})
+# the quarry rim points close the terrain at the pit's own rim heights; the template cuts the triangles spanned by rim points alone
+o = len(P) - sum(len(r) for r in QRIM); pit_range = [o, sum(len(r) for r in QRIM)]
+for ry in PIT: y[o:o + len(ry)] = ry; o += len(ry)
+
 tri = Delaunay(P).simplices
 c = P[tri].mean(axis=1)
 ok = inside(c[:, 0], c[:, 1])
@@ -160,7 +230,7 @@ tri = tri[ok & (e < 3.5)]
 print("triangles", len(tri))
 out = {"pts": np.round(np.c_[P[:, 0], y, P[:, 1]], 3).ravel().tolist(), "m": np.round(m).astype(int).tolist(), 
        "border": D["border"], "borderY": np.round(yof(meters(bx, bz)), 3).tolist(),
-       "rivers": rivers_out, "lakes": lakes_out, "cities": D["cities"]}
+       "rivers": rivers_out, "lakes": lakes_out, "cities": D["cities"], "ys": YS, "marks": marks_out, "pit": pit_range}
 s = json.dumps(out, ensure_ascii=False, separators=(",", ":")); open("lp.json", "w", encoding="utf8").write(s); print("bytes", len(s))
 
 # ---- lake water surfaces: their own irregular triangles
