@@ -219,7 +219,7 @@ function facet(src,paint,extra){
   return out}
 function merge(list){const out=new THREE.BufferGeometry();for(const name of Object.keys(list[0].attributes)){const size=list[0].attributes[name].itemSize,arr=new Float32Array(list.reduce((s,g)=>s+g.attributes[name].array.length,0));let o=0;for(const g of list){arr.set(g.attributes[name].array,o);o+=g.attributes[name].array.length}out.setAttribute(name,new THREE.BufferAttribute(arr,size))}return out}
 function jitter(geo,amount,seed=1){const p=geo.attributes.position;for(let i=0;i<p.count;i++){const k=Math.round(p.getX(i)*500)*.731+Math.round(p.getY(i)*500)*1.913+Math.round(p.getZ(i)*500)*3.377+seed*17.17;p.setXYZ(i,p.getX(i)+(hash(k,1)-.5)*2*amount,p.getY(i)+(hash(k,2)-.5)*2*amount,p.getZ(i)+(hash(k,3)-.5)*2*amount)}return geo}
-const clock={value:0},riverWidth={value:1},riverZoom={value:1};
+const clock={value:0},riverWidth={value:1},riverZoom={value:1},mainWidth={value:1};   // mainWidth: the main rivers grow wider on the overview so they read from afar
 // the one material: flat-shaded, per-facet colour, matte; options add water motion
 function faceted(o={}){
   const m=new THREE.MeshStandardMaterial({vertexColors:true,flatShading:true,roughness:o.roughness==null?.92:o.roughness,metalness:0,side:o.side||THREE.FrontSide});
@@ -290,9 +290,11 @@ const townInfluence=(x,z)=>1-THREE.MathUtils.smoothstep(Math.hypot((x+7.74)/1.02
 const lowerHoryn=d=>THREE.MathUtils.smoothstep(d,2.7,4.5);
 
 function riverHalfWidth(r,p){
-  const broad=r.w*(.45+.55*Math.min(1,p[2]/r.D))*.3;
-  if(r===vetlitsa)return broad*.16;
-  if(r===lva)return broad*.38;
+  // half width of the water as on a physical map: narrow at the source, widest at the mouth (scripts/prep_lp.py writes r.hm)
+  const old=r.w*(.45+.55*Math.min(1,p[2]/r.D))*.3;   // the earlier, wider scale: the hand-drawn Vetlitsa and Lva are tuned on it
+  const broad=r.hm!=null?Math.max(.016,r.hm*(.35+.65*Math.min(1,p[2]/r.D))):old;
+  if(r===vetlitsa)return old*.16;
+  if(r===lva)return old*.38;
   if(r!==horyn)return broad;
   if(p[2]>14)return .027*THREE.MathUtils.smoothstep(p[2],14.93,15.38);
   // Vary width along the river instead of at the edge of the town terrain.
@@ -517,16 +519,18 @@ const waterBody=(amplitude=".025")=>`float fu=clamp((uTime-(uT0+aEx.x/uSpeed))/0
   float fo=1.-pow(1.-fu,3.)+.25*sin(fu*3.14159)*fu;
   transformed=aEx.yzw+(transformed-aEx.yzw)*fo;
   transformed.xz-=aOff*(1.-uWidth);
+  transformed.y+=max(uWidth-1.,0.)*.3;   // a widened main river rises over its banks
   transformed.y+=sin(aCen.x*1.7+uTime*1.3)*cos(aCen.z*1.4-uTime*1.1)*${amplitude}*fu;`;
 const waterTint=`float fl=fract(aEx.x*.22-uTime*.75+fract(aCen.x*37.+aCen.z*17.)*.35);
   vColor.rgb=mix(vColor.rgb,vec3(.86,.97,.96),.55*smoothstep(.72,.86,fl)*smoothstep(1.,.86,fl));
   float gw=.5+.5*sin(aEx.x*1.1-uTime*4.);vColor.rgb=mix(vColor.rgb,vec3(.2,.64,1.35)*(1.2+.6*gw),uSel*.95);`;
-let minorK=0;
+// tributaries fill with water only once the map is zoomed in close enough to see them; small rivers at the distance where they are shown
+const GATE={minor:125,auto:38};let minorK=0;
 // Where a line runs into another river, cut its end along that river's bank.
 // A line that simply continues the same river, and the wider river at a junction, stay whole.
 function drawnHalf(r,p){
   const detail=r===vetlitsa||r===lva?1:r===horyn?lowerHoryn(p[2]):0;
-  return riverHalfWidth(r,p)+.06*(1-detail);
+  return riverHalfWidth(r,p)+.012*(1-detail);
 }
 const mouthCell=1.5,mouthGrid=new Map(),mouthLines=[];
 for(const [,r] of Object.entries(L.rivers))for(const line of r.lines){
@@ -608,7 +612,8 @@ function mouthFit(line,end){
 let mouthCursor=0;
 for(const [name,r] of Object.entries(L.rivers)){
   const tris=[],exTri=[],oldChannelFaces=[],minor=!!(CARDS[name]&&CARDS[name].minor),auto=!!(CARDS[name]&&CARDS[name].auto);
-  const uni={uT0:{value:reduce?-99:(auto?3.4+(minorK++)*.012:minor?2.2+(minorK++)*.09:.6)},uSpeed:{value:minor?24:34},uSel:{value:0}};
+  const gate=auto?GATE.auto:minor?GATE.minor:0;   // camera distance at which this river starts to fill
+  const uni={uT0:{value:reduce?-99:gate?1e9:.6},uSpeed:{value:minor?24:34},uSel:{value:0}};
   for(const line of r.lines){
     const src=mouthLines[mouthCursor++];
     const lo=mouthFit(src,"lo"),hi=mouthFit(src,"hi");
@@ -628,7 +633,7 @@ for(const [name,r] of Object.entries(L.rivers)){
       if(mouthCap&&i===rows.length-1)return mouthCap[k];
       const p=rows[i],p0=rows[Math.max(0,i-1)],p1=rows[Math.min(rows.length-1,i+1)];let tx=p1[0]-p0[0],tz=p1[1]-p0[1];const Lx=Math.hypot(tx,tz)||1;tx/=Lx;tz/=Lx;
       const detail=r===vetlitsa||r===lva?1:r===horyn?lowerHoryn(p[2]):0;
-      const hw=riverHalfWidth(r,p)+.06*(1-detail),inner=k===1||k===2;
+      const hw=riverHalfWidth(r,p)+.012*(1-detail),inner=k===1||k===2;
       const edge=(headCap&&i<3)||(mouthCap&&i>=rows.length-3);
       const jitter=THREE.MathUtils.lerp(.14,.009,detail)*Math.min(1,hw/.025)*(edge ? .25 : 1);
       const jj=inner?(hash(i,k)-.5)*jitter:0,off=[-1,-.36,.36,1][k]*hw;
@@ -648,10 +653,12 @@ for(const [name,r] of Object.entries(L.rivers)){
     const oldChannel=oldChannelFaces[i]&&townInfluence(c.x,c.z)>.35;
     return tone(oldChannel?"#3793a0":PAL.river,c.x*5.3+c.z*9.1,oldChannel?.73:1.3);
   },(m,n,ti)=>exTri[ti]);
-  const mat=faceted({roughness:.32,uniforms:Object.assign({uWidth:riverZoom},uni),head:"attribute vec4 aEx;attribute vec2 aOff;uniform float uT0,uSpeed,uSel,uWidth;\n",body:waterBody(r===horyn?".007":r===vetlitsa||r===lva?".003":undefined),tint:waterTint});
+  const mat=faceted({roughness:.32,uniforms:Object.assign({uWidth:gate?riverZoom:mainWidth},uni),head:"attribute vec4 aEx;attribute vec2 aOff;uniform float uT0,uSpeed,uSel,uWidth;\n",body:waterBody(r===horyn?".007":r===vetlitsa||r===lva?".003":undefined),tint:waterTint});
+  if(!gate){mat.polygonOffset=true;mat.polygonOffsetFactor=-1;mat.polygonOffsetUnits=-2}   // a widened main river stays on top of its banks
   const m=meshOf(fg,mat,{cast:false});m.userData.name=name;scene.add(m);clickables.push(m);
   const main=r.lines.reduce((a,b)=>a.length>b.length?a:b);const mid=main[Math.floor(main.length*.5)];
-  items[name]={type:"river",uni,mesh:m,mid:new THREE.Vector3(mid[0],mid[3],mid[1]),len:r.D,main,minor,auto};
+  let x0=1e9,x1=-1e9,z0=1e9,z1=-1e9;for(const l of r.lines)for(const p of l){x0=Math.min(x0,p[0]);x1=Math.max(x1,p[0]);z0=Math.min(z0,p[1]);z1=Math.max(z1,p[1])}
+  items[name]={type:"river",uni,mesh:m,mid:new THREE.Vector3(mid[0],mid[3],mid[1]),len:r.D,main,minor,auto,gate,filled:reduce||!gate,box:[x0,x1,z0,z1]};
 }
 // lakes: facets that spread from the middle
 for(const [name,lk] of Object.entries(L.lakes)){
@@ -681,7 +688,7 @@ arrows.renderOrder=2;scene.add(arrows);
 const _ao=new THREE.Object3D();
 function sampleLine(L0,cum,s){let lo=0,hi=cum.length-1;while(hi-lo>1){const m=(lo+hi)>>1;if(cum[m]<=s)lo=m;else hi=m}
   const t=(s-cum[lo])/((cum[hi]-cum[lo])||1),a=L0[lo],b=L0[hi];return [a[0]+(b[0]-a[0])*t,a[3]+(b[3]-a[3])*t,a[1]+(b[1]-a[1])*t,b[0]-a[0],b[1]-a[1]]}
-let arrSc=.5;
+let arrSc=.5,arrowK=1;
 function updateArrows(T,camD){const show=camD<170;arrows.visible=show;if(!show)return;
   arrSc+=(Math.min(.75,Math.max(.28,camD/90))-arrSc)*.08;                 // size follows zoom smoothly, never jumps
   flowSlots.forEach((f,i)=>{const end=f.cum[f.cum.length-1]-.01,u=((T*.55)/SPACE)%1,s=Math.min(f.s0+u*SPACE,end);
@@ -689,7 +696,7 @@ function updateArrows(T,camD){const show=camD<170;arrows.visible=show;if(!show)r
     const filled=T>f.it.uni.uT0.value+s/f.it.uni.uSpeed.value+.4;
     const fade=Math.min(1,u/.15,(1-u)/.15);                                  // grow in and shrink out only at the ends of the run
     _ao.position.set(p[0],p[1]+.1,p[2]);_ao.rotation.set(0,Math.atan2(b[0]-a[0],b[2]-a[2])+Math.PI,0);   // heading from a chord, so no snapping at bends
-    _ao.scale.setScalar(filled?arrSc*fade*(riverZoom.value/riverWidth.value):.0001);_ao.updateMatrix();arrows.setMatrixAt(i,_ao.matrix)});
+    _ao.scale.setScalar(filled?arrSc*fade*arrowK:.0001);_ao.updateMatrix();arrows.setMatrixAt(i,_ao.matrix)});
   arrows.instanceMatrix.needsUpdate=true}
 
 // ---------------------------------------------------------------- props: trees, rocks, towns, clouds
@@ -1015,7 +1022,7 @@ function select(n,doFly){
   selected=n;
   for(const [k,it] of Object.entries(items)){it.uni.uSel.value=k===n?1:0;chips[k]&&chips[k].setAttribute("aria-pressed",k===n)}
   if(!n){card.classList.add("hide");closeBubble();return}
-  const it=items[n];openBubble(n);if(!reduce){it.uni.uT0.value=T+.15;it.pin.t0=T+.15+(it.type==="river"?it.len*.45/it.uni.uSpeed.value:.6)}
+  const it=items[n];it.filled=true;openBubble(n);if(!reduce){it.uni.uT0.value=T+.15;it.pin.t0=T+.15+(it.type==="river"?it.len*.45/it.uni.uSpeed.value:.6)}
   const c=CARDS[n],lake=c.type==="lake"||c.type==="reservoir";renderCard(n);
   card.classList.remove("hide");
   if(doFly){const t=it.mid.clone(),dir=camera.position.clone().sub(controls.target).normalize();dir.y=Math.max(dir.y,.6);dir.normalize();
@@ -1037,13 +1044,13 @@ reportCard.onsubmit=async e=>{e.preventDefault();const text=reportText.value.tri
     reportText.value="";reportText.hidden=true;reportSend.hidden=true;reportLead.textContent=tx("reportDone");reportStatus.textContent=""}
   catch(err){reportStatus.textContent=tx("reportFail");reportSend.disabled=false}};
 document.getElementById("home").onclick=()=>{select(null);flyTo(HOME.target.clone(),HOME.pos.clone())};
-document.getElementById("refill").onclick=()=>{if(reduce)return;let k=0;for(const it of Object.values(items)){it.uni.uT0.value=T+.2+k*.08;it.pin.t0=it.uni.uT0.value+(it.type==="river"?it.len*.45/it.uni.uSpeed.value:.6)+.15;k++}};
+document.getElementById("refill").onclick=()=>{if(reduce)return;let k=0;for(const it of Object.values(items)){if(it.filled===false)continue;it.uni.uT0.value=T+.2+k*.08;it.pin.t0=it.uni.uT0.value+(it.type==="river"?it.len*.45/it.uni.uSpeed.value:.6)+.15;k++}};
 const ray=new THREE.Raycaster(),ndc=new THREE.Vector2();let down=null;
 canvas.addEventListener("pointerdown",e=>{down=[e.clientX,e.clientY];fly=null;if(narrow&&!list.classList.contains("collapsed")){search.blur();setListOpen(false)}});
 canvas.addEventListener("pointerup",e=>{if(!down||Math.hypot(e.clientX-down[0],e.clientY-down[1])>6)return;ndc.set(e.clientX/innerWidth*2-1,-(e.clientY/innerHeight)*2+1);ray.setFromCamera(ndc,camera);
   // a river counts only where its water is actually drawn (rivers are thin on the overview, their geometry is not)
   const hit=ray.intersectObjects(clickables.filter(o=>o.visible),false).find(h=>{if(h.object.userData.pin)return true;const n=h.object.userData.name,it=items[n];if(!it||it.type!=="river")return true;
-    const rv=riverNear(h.point.x,h.point.z);return rv.d<=(rv.hw+.06)*riverZoom.value+.06});
+    if(it.filled===false)return false;const rv=riverNear(h.point.x,h.point.z);return rv.d<=(rv.hw+.012)*(it.gate?1:mainWidth.value)+.08});
   if(!hit){closeBubble();return}
   const n=hit.object.userData.pin||hit.object.userData.name;if(n)openBubble(n)});
 canvas.addEventListener("pointermove",e=>{if(e.pointerType!=="mouse")return;ndc.set(e.clientX/innerWidth*2-1,-(e.clientY/innerHeight)*2+1);ray.setFromCamera(ndc,camera);
@@ -1053,6 +1060,10 @@ addEventListener("resize",resize);resize();
 document.getElementById("loading").remove();
 const start=performance.now();
 const scaleBar=document.querySelector("#scale i"),scaleLbl=document.querySelector("#scale span"),_sa=new THREE.Vector3(),_sb=new THREE.Vector3(),_sr=new THREE.Vector3();let scaleTick=0;
+// a waiting river fills (from its source) when the camera is close enough and the river is near the middle of the view
+let fillTick=0;function fillNear(T){if(reduce||(++fillTick)%6)return;const tx=controls.target.x,tz=controls.target.z,R=camD*.75;let k=0;
+  for(const it of Object.values(items)){if(it.filled!==false||camD>it.gate)continue;const b=it.box,dx=Math.max(b[0]-tx,0,tx-b[1]),dz=Math.max(b[2]-tz,0,tz-b[3]);
+    if(dx*dx+dz*dz>R*R)continue;it.filled=true;it.uni.uT0.value=T+.1+Math.min(k++,20)*.05;it.pin.t0=it.uni.uT0.value+it.len*.45/it.uni.uSpeed.value+.15}}
 function loop(now){
   T=(now-start)/1000;clock.value=reduce?50:T;
   for(const [m,x,y,z,seed] of clouds)m.position.set(x+((T*.6+seed*13)%40)-20,y+.4*Math.sin(T*.5+seed),z);
@@ -1063,7 +1074,10 @@ function loop(now){
   camD=camera.position.distanceTo(controls.target);
   const zoom=Math.min(1,Math.max(0,(130-camD)/110));
   riverWidth.value=.3+.7*zoom;   // lakes: unchanged, thin on the overview and full close up
-  riverZoom.value=.1+.9*zoom;    // rivers: three times thinner on the overview, the same full width close up
+  riverZoom.value=1;             // tributaries and small rivers: map-scale width at every zoom
+  mainWidth.value=1+1.3*Math.min(1,Math.max(0,(camD-45)/105));   // main rivers: up to 2.3x on the overview, true map width from close up
+  arrowK=(.1+.9*zoom)/(.3+.7*zoom);   // flow arrows keep their former size
+  fillNear(T);
   for(const [name,it] of Object.entries(items))if(it.auto&&it.mesh)it.mesh.visible=camD<38||name===selected||name===bubbleFor;
   const fs=Math.min(portrait?5:3.6,Math.max(.6,camD/38));
   for(const p of pins){const t=reduce?9:T-p.t0,a=spring(t,2.6,.38);const near=(p.auto?camD<38:(!p.minor||camD<70))||p.name===selected||p.name===bubbleFor;
