@@ -753,17 +753,21 @@ function blockGeo(seed,F,w,d,cols,dcols,wall){const fh=.17,H=F*fh,body=new THREE
   const top=new THREE.BoxGeometry(w+.04,.04,d+.04);top.translate(0,H+.02,0);
   return shrink(merge([facet(body,(c,n)=>{if(Math.abs(n.y)>.5)return tone("#8c8a8f",seed,.4);
       const row=Math.floor(c.y/(fh/2)),col=Math.abs(n.z)>.5?Math.floor((c.x+w/2)/(w/(cols*2+1))):Math.floor((c.z+d/2)/(d/(dcols*2+1)));
-      if(row%2===1&&col%2===1){const h=hash(col+seed*13,row,Math.round(n.x*2)*3+Math.round(n.z*2));return tone(h<.12?"#f3d48c":"#5f7f96",h*97,.6)}
+      if(row%2===1&&col%2===1){const h=hash(col+seed*13,row,Math.round(n.x*2)*3+Math.round(n.z*2));return tone(h<.12?"#f3d48c":"#4d6c86",h*97,.6)}
       return tone(wall,row*3+seed,.35).multiplyScalar(Math.abs(n.x)>.5?.94:1)}),
     facet(top,()=>tone("#8c8a8f",seed,.4))]),HOUSE_K)}
 function towerGeo(seed){const b=new THREE.BoxGeometry(.42,1,.42);b.translate(0,.5,0);const t=new THREE.ConeGeometry(.32,.3,4);t.rotateY(Math.PI/4);t.translate(0,1.15,0);
   return shrink(merge([facet(b,c=>tone("#f4efe6",c.y*11+seed,.6)),facet(t,c=>tone(PAL.accent,c.y*7+seed,.6))]),HOUSE_K)}
 const kinds={pine:pineGeo(1),pine2:pineGeo(2,.8),tree:treeGeo(3,PAL.leaf),ochre:treeGeo(4,PAL.ochre),rock:rockGeo(5),house:houseGeo(1,PAL.roof),house2:houseGeo(2,PAL.roof2),house3:houseGeo(3,PAL.roof3),
-  villa:villaGeo(5,PAL.roof2),villa2:villaGeo(6,"#7d6a63"),block:blockGeo(7,5,.9,.34,6,2,"#ece4d6"),block9:blockGeo(8,9,.46,.42,3,3,"#f2eee8"),tower:towerGeo(4)};
-const place={pine:[],pine2:[],tree:[],ochre:[],rock:[],house:[],house2:[],house3:[],villa:[],villa2:[],block:[],block9:[],tower:[]};
+  villa:villaGeo(5,PAL.roof2),villa2:villaGeo(6,"#7d6a63"),tower:towerGeo(4)};
+const place={pine:[],pine2:[],tree:[],ochre:[],rock:[],house:[],house2:[],house3:[],villa:[],villa2:[],tower:[]};
 // footprint radius of each building at instance scale 1: half the diagonal of its widest part (roof overhang included)
 const footR={house:Math.hypot(.28,.25)*HOUSE_K,house2:Math.hypot(.28,.25)*HOUSE_K,house3:Math.hypot(.28,.25)*HOUSE_K,villa:Math.hypot(.31,.26)*HOUSE_K,villa2:Math.hypot(.31,.26)*HOUSE_K,
-  block:Math.hypot(.47,.19)*HOUSE_K,block9:Math.hypot(.25,.23)*HOUSE_K,tower:Math.hypot(.21,.21)*HOUSE_K};
+  tower:Math.hypot(.21,.21)*HOUSE_K};
+// panel blocks come in three wall colours: off-white, pale blue and warm cream (block, blockB, blockC; the same for block9)
+const BLOCK_WALLS=[["","#f7f3ec"],["B","#b4cde6"],["C","#f4e0bb"]];
+BLOCK_WALLS.forEach(([suf,wall],i)=>{kinds["block"+suf]=blockGeo(7+i*2,5,.9,.34,6,2,wall);kinds["block9"+suf]=blockGeo(8+i*2,9,.46,.42,3,3,wall);
+  place["block"+suf]=[];place["block9"+suf]=[];footR["block"+suf]=Math.hypot(.47,.19)*HOUSE_K;footR["block9"+suf]=Math.hypot(.25,.23)*HOUSE_K});
 // every placed building goes into a coarse grid, so a new one is checked only against its neighbours
 const BCELL=.35,builtGrid=new Map();
 const roomFor=(x,z,rad)=>{const a0=Math.floor(x/BCELL),b0=Math.floor(z/BCELL);for(let a=a0-1;a<=a0+1;a++)for(let b=b0-1;b<=b0+1;b++)for(const [px,pz,pr] of builtGrid.get(a*100003+b)||[])if(Math.hypot(px-x,pz-z)<pr+rad+.012)return false;return true};
@@ -778,7 +782,7 @@ for(const lk of Object.values(L.lakes)){const Q=lk.pts,T=lk.tri;
 const inLake=(x,z)=>lakeMask.has(Math.floor(x/LCELL)*100003+Math.floor(z/LCELL));
 // big towns are mostly panel blocks, densest in the centre; nine-storey ones rise among them in Minsk and the regional centres
 const townKind=(r,t,minsk)=>{const u=rnd(),tower=r===1&&t<.3?.15:0,block=r===1?.85-.55*t:r===2?.6-.4*t:r===3&&t<.5?.2:0,villa=r===4?.2:.3;
-  if(u<tower)return "tower";if(u<tower+block)return rnd()<(minsk?.5:r===1?.35:r===2?.2:0)?"block9":"block";
+  if(u<tower)return "tower";if(u<tower+block)return rnd()<(minsk?.5:r===1?.35:r===2?.2:0)?"block9"+BLOCK_WALLS[Math.floor(rnd()*3)][0]:"block"+BLOCK_WALLS[Math.floor(rnd()*3)][0];
   return u<tower+block+villa?(rnd()<.5?"villa":"villa2"):["house","house2","house3"][Math.floor(rnd()*3)]};
 const townScale=(kind,r,minsk)=>kind==="tower"?.6+rnd()*(minsk?.9:.5):r===4?.85+rnd()*.12:r===3?.95+rnd()*.15:1+rnd()*.2;
 // lowest ground under a building's footprint, so on a slope no corner hangs in the air
