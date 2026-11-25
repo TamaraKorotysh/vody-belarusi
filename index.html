@@ -1441,7 +1441,7 @@ const nearCity=(x,z)=>Math.hypot(x-davyd.x,z-davyd.z)<.39||L.cities.some(([n,cx,
     const y=heightAt(x,z);if(y==null)continue;
     const polesie=z>13;const kind=inForest?(polesie?(rnd()<.5?"tree":"pine2"):(rnd()<.62?(rnd()<.5?"pine":"pine2"):(rnd()<.2?"ochre":"tree"))):(rnd()<.3?"ochre":"tree");
     place[kind].push([x,y-.03,z,.32+rnd()*.22,rnd()*6.28,(rnd()-.5)*.1]);n++}
-  for(let t=0;t<3000;t++){const x=x0+rnd()*(x1-x0),z=z0+rnd()*(z1-z0);if(!inPoly(x,z,B))continue;const rv=riverNear(x,z);if(!(rv.d>rv.hw+.4&&rv.d<rv.hw+1.4)||rnd()>.25||inLake(x,z)||inMark(x,z,.06))continue;const y=heightAt(x,z);if(y==null)continue;place.rock.push([x,y-.02,z,.25+rnd()*.35,rnd()*6.28,0])}
+  for(let t=0;t<3000;t++){const x=x0+rnd()*(x1-x0),z=z0+rnd()*(z1-z0);if(!inPoly(x,z,B))continue;const rv=riverNear(x,z);if(!(rv.d>rv.hw+.4&&rv.d<rv.hw+1.4)||rnd()>.08||inLake(x,z)||inMark(x,z,.06))continue;const y=heightAt(x,z);if(y==null)continue;place.rock.push([x,y-.006,z,.05+rnd()*.09,rnd()*6.28,0])}   // boulders a few hundred metres across, about a house's size, and a third as many as before
   for(const [nm,cx,cz,r] of L.cities){const minsk=nm==="Минск",count=minsk?130:r===1?55:r===2?26:r===3?11:6,spread=minsk?2.4:r===1?1.7:r===2?1.15:r===3?.75:.5;
     for(let k=0,tries=0;k<count&&tries<count*60;tries++){   /* a river town may step just past its radius to find a dry bank, but not far enough to meet the next town */
       const grow=1+tries/(count*8),a=rnd()*6.283,rr=Math.sqrt(rnd())*spread*Math.min(grow,1.15),x=cx+Math.cos(a)*rr,z=cz+Math.sin(a)*rr;
