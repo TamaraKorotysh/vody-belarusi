@@ -637,7 +637,8 @@ let mouthCursor=0;
 for(const [name,r] of Object.entries(L.rivers)){
   const tris=[],exTri=[],oldChannelFaces=[],minor=!!(CARDS[name]&&CARDS[name].minor),auto=!!(CARDS[name]&&CARDS[name].auto);
   const gate=auto?GATE.auto:minor?GATE.minor:0;   // camera distance at which this river starts to fill
-  const uni={uT0:{value:reduce?-99:gate?1e9:.6},uSpeed:{value:minor?24:34},uSel:{value:0}};
+  // a lake of the same name (Plissa, Yelnya, Servech) takes this name in items, so nothing would ever fill the river on zooming in: it starts filled
+  const uni={uT0:{value:reduce?-99:gate&&!L.lakes[name]?1e9:.6},uSpeed:{value:minor?24:34},uSel:{value:0}};
   for(const line of r.lines){
     const src=mouthLines[mouthCursor++];
     const lo=mouthFit(src,"lo"),hi=mouthFit(src,"hi");
