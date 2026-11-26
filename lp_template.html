@@ -637,7 +637,8 @@ let mouthCursor=0;
 for(const [name,r] of Object.entries(L.rivers)){
   const tris=[],exTri=[],oldChannelFaces=[],minor=!!(CARDS[name]&&CARDS[name].minor),auto=!!(CARDS[name]&&CARDS[name].auto);
   const gate=auto?GATE.auto:minor?GATE.minor:0;   // camera distance at which this river starts to fill
-  const uni={uT0:{value:reduce?-99:gate?1e9:.6},uSpeed:{value:minor?24:34},uSel:{value:0}};
+  // a lake of the same name (Plissa, Yelnya, Servech) takes this name in items, so nothing would ever fill the river on zooming in: it starts filled
+  const uni={uT0:{value:reduce?-99:gate&&!L.lakes[name]?1e9:.6},uSpeed:{value:minor?24:34},uSel:{value:0}};
   for(const line of r.lines){
     const src=mouthLines[mouthCursor++];
     const lo=mouthFit(src,"lo"),hi=mouthFit(src,"hi");
@@ -691,7 +692,9 @@ for(const [name,lk] of Object.entries(L.lakes)){
     const mx=(tt[0][0]+tt[1][0]+tt[2][0])/3,mz=(tt[0][2]+tt[1][2]+tt[2][2])/3,dd=Math.hypot(mx-cx,mz-cz)*3+hash(k)*.5;
     for(const v of tt)pos.push(...v);exTri.push([dd,cx,lk.level,cz])}
   const g=new THREE.BufferGeometry();g.setAttribute("position",new THREE.Float32BufferAttribute(pos,3));
-  const fg=facet(g,c=>{const r=Math.hypot(c.x-cx,c.z-cz);return tone(r<.6?PAL.lakeDeep:PAL.lake,c.x*3.1+c.z*7.7,1.2)},(m,n,ti)=>exTri[ti]);
+  // a river flowing through keeps lighter water along its course, close to its own colour, so it runs on across the lake (prep_lp.py writes lk.flow)
+  const F=lk.flow||[],onCourse=(x,z)=>{for(let i=0;i<F.length;i+=3)if(Math.hypot(x-F[i],z-F[i+1])<F[i+2]+.03)return true;return false};
+  const fg=facet(g,c=>{const r=Math.hypot(c.x-cx,c.z-cz);return tone(!onCourse(c.x,c.z)&&r<.6?PAL.lakeDeep:PAL.lake,c.x*3.1+c.z*7.7,1.2)},(m,n,ti)=>exTri[ti]);
   const minor=!!(CARDS[name]&&CARDS[name].minor);
   const uni={uT0:{value:reduce?-99:(minor?3:1.2)},uSpeed:{value:6},uSel:{value:0}};
   const mat=faceted({roughness:.3,uniforms:Object.assign({uWidth:riverWidth},uni),head:"attribute vec4 aEx;attribute vec2 aOff;uniform float uT0,uSpeed,uSel,uWidth;\n",body:waterBody(),
@@ -715,7 +718,8 @@ function sampleLine(L0,cum,s){let lo=0,hi=cum.length-1;while(hi-lo>1){const m=(l
 let arrSc=.5,arrowK=1;
 function updateArrows(T,camD){const show=camD<170;arrows.visible=show;if(!show)return;
   arrSc+=(Math.min(.75,Math.max(.28,camD/90))-arrSc)*.08;                 // size follows zoom smoothly, never jumps
-  flowSlots.forEach((f,i)=>{const end=f.cum[f.cum.length-1]-.01,u=((T*.55)/SPACE)%1,s=Math.min(f.s0+u*SPACE,end);
+  flowSlots.forEach((f,i)=>{const end=f.cum[f.cum.length-1]-.45,   // stop short of the line's end: it may end inside a lake the river flows through
+u=((T*.55)/SPACE)%1,s=Math.min(f.s0+u*SPACE,end);
     const p=sampleLine(f.L0,f.cum,s),a=sampleLine(f.L0,f.cum,Math.max(0,s-1.6)),b=sampleLine(f.L0,f.cum,Math.min(end,s+1.6));
     const filled=T>f.it.uni.uT0.value+s/f.it.uni.uSpeed.value+.4;
     const fade=Math.min(1,u/.15,(1-u)/.15);                                  // grow in and shrink out only at the ends of the run
@@ -799,7 +803,7 @@ const nearCity=(x,z)=>Math.hypot(x-davyd.x,z-davyd.z)<.39||L.cities.some(([n,cx,
     const y=heightAt(x,z);if(y==null)continue;
     const polesie=z>13;const kind=inForest?(polesie?(rnd()<.5?"tree":"pine2"):(rnd()<.62?(rnd()<.5?"pine":"pine2"):(rnd()<.2?"ochre":"tree"))):(rnd()<.3?"ochre":"tree");
     place[kind].push([x,y-.03,z,.32+rnd()*.22,rnd()*6.28,(rnd()-.5)*.1]);n++}
-  for(let t=0;t<3000;t++){const x=x0+rnd()*(x1-x0),z=z0+rnd()*(z1-z0);if(!inPoly(x,z,B))continue;const rv=riverNear(x,z);if(!(rv.d>rv.hw+.4&&rv.d<rv.hw+1.4)||rnd()>.25||inLake(x,z)||inMark(x,z,.06))continue;const y=heightAt(x,z);if(y==null)continue;place.rock.push([x,y-.02,z,.25+rnd()*.35,rnd()*6.28,0])}
+  for(let t=0;t<3000;t++){const x=x0+rnd()*(x1-x0),z=z0+rnd()*(z1-z0);if(!inPoly(x,z,B))continue;const rv=riverNear(x,z);if(!(rv.d>rv.hw+.4&&rv.d<rv.hw+1.4)||rnd()>.08||inLake(x,z)||inMark(x,z,.06))continue;const y=heightAt(x,z);if(y==null)continue;place.rock.push([x,y-.006,z,.05+rnd()*.09,rnd()*6.28,0])}   // boulders a few hundred metres across, about a house's size, and a third as many as before
   for(const [nm,cx,cz,r] of L.cities){const minsk=nm==="Минск",count=minsk?130:r===1?55:r===2?26:r===3?11:6,spread=minsk?2.4:r===1?1.7:r===2?1.15:r===3?.75:.5;
     for(let k=0,tries=0;k<count&&tries<count*60;tries++){   /* a river town may step just past its radius to find a dry bank, but not far enough to meet the next town */
       const grow=1+tries/(count*8),a=rnd()*6.283,rr=Math.sqrt(rnd())*spread*Math.min(grow,1.15),x=cx+Math.cos(a)*rr,z=cz+Math.sin(a)*rr;
