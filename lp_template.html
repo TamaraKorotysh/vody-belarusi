@@ -482,7 +482,7 @@ function paintLand(c,n,k){
   let name;
   // channel bed and banks are green floodplain, so the thin water line of the overview sits in a meadow valley
   if(rv.d<rv.hw*.9&&c.y<rv.y)name=hash(key,6)<.5?"swamp":"swamp2";
-  else if(rv.d<rv.hw+.6&&n.y<.93)name=hash(key,7)<.25?"sand":"meadow";
+  else if(rv.d<rv.hw+.6&&n.y<.93)name="meadow";   // steep bank faces stay the meadow green: sand or light grass there read as stray shards
   else if(n.y<.7)name=hash(key,9)<.5?"upland":"sand";
   else{
     const fz=forestN(c.x,c.z),swamp=c.z>13&&m<168&&vn(c.x*.35+7,c.z*.35)>.45;

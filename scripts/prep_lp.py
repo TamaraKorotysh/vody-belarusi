@@ -120,28 +120,40 @@ dist, ci = ctree.query(P)
 P = P[dist > cinfo[ci, 0] + .24]                     # channels get their own points: keep clear of each river by its own width
 P = P[inside(P[:, 0], P[:, 1])]
 pts.append(P)
-# denser band around rivers
+# denser band around rivers: at every vertex the bed, the bank right at the water's edge and the lower valley side,
+# at every second one the upper valley side, so the slope from water to meadow is small even triangles, not long slivers.
+# They are kept apart from the rest: the coarse duplicate filter below would merge a bank with its bed (only ~.045 apart).
+RP = []
 for n, r in rivers_out.items():
     for l in r["lines"]:
         a = np.array(l)
-        for k in range(0, len(a), 1):
+        for k in range(len(a)):
             x, z, d, yy = a[k]
             p0 = a[max(0, k - 1)]; p1 = a[min(len(a) - 1, k + 1)]
             tx, tz = p1[0] - p0[0], p1[1] - p0[1]; L = math.hypot(tx, tz) or 1; tx /= L; tz /= L
             hw = half(n, d, r["D"])
-            if k % 2 == 0:
-                for off in (0, -(hw + .025), hw + .025) + ((-(hw + .13), hw + .13) if k % 4 == 0 else ()):   # bed, the bank right at the water's edge, the valley side
-                    pts.append(np.array([[x - tz * off, z + tx * off]]))
+            for off in (0, hw + .025, hw + .1) + ((hw + .18,) if k % 2 == 0 else ()):
+                for s_ in ((1,) if off == 0 else (-1, 1)):
+                    RP.append((x - tz * off * s_, z + tx * off * s_, off))
+RP = np.array(RP)
+# on the inside of a bend the offsets cross over the channel and pile up: keep a side point only where it really is that far from the water
+dq, _ = ctree.query(RP[:, :2]); RP = RP[(RP[:, 2] == 0) | (dq > RP[:, 2] * .8)][:, :2]
+RP = RP[inside(RP[:, 0], RP[:, 1])]
+_, keep = np.unique(np.round(RP / 0.02).astype(int), axis=0, return_index=True); RP = RP[np.sort(keep)]
 pts.append(resample(border, 0.7))
 for ring, lvl, holes in lake_polys:
     pts.append(resample(ring, 0.45));
     for h in holes: pts.append(resample(h, 0.45))
 for mk in LM["marks"]:
     if mk["kind"] != "quarry": continue
-    for i, a in enumerate(pts): pts[i] = a[~inside(a[:, 0], a[:, 1], mk["xz"][:, 0], mk["xz"][:, 1]) & (cKDTree(mk["rim"]).query(a)[0] > .03)]
+    for i, a in enumerate(pts + [RP]):
+        a = a[~inside(a[:, 0], a[:, 1], mk["xz"][:, 0], mk["xz"][:, 1]) & (cKDTree(mk["rim"]).query(a)[0] > .03)]
+        if i < len(pts): pts[i] = a
+        else: RP = a
 P = np.vstack(pts)
 # drop exact duplicates / near-duplicates
 _, keep = np.unique(np.round(P / 0.12).astype(int), axis=0, return_index=True); P = P[np.sort(keep)]
+P = np.vstack([P[cKDTree(RP).query(P)[0] > .03], RP])   # the river band goes in after the coarse filter, other points give way to it
 QRIM = [mk["rim"] for mk in LM["marks"] if mk["kind"] == "quarry"]   # the quarry rim exactly: the template cuts the terrain there and fits the pit in
 if QRIM: P = np.vstack([P] + QRIM)
 P = P[inside(P[:, 0], P[:, 1]) | (cKDTree(border).query(P)[0] < 0.05)]
