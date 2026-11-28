@@ -204,17 +204,32 @@ for n in KEEP:
                 for off in (0, -(hw + .025), hw + .025) + ((-(hw + .13), hw + .13) if k % 4 == 0 else ()):   # bed, the bank right at the water's edge, the valley side
                     pts.append(np.array([[x - tz * off, z + tx * off]]))
 pts.append(resample(border, 0.7))
+# lake shores: points close along the shore itself, a row just outside it (still at shore height) and one a little further out,
+# and a row just inside under the water. Like the channel points they skip the near-duplicate thinning: with the shore alone
+# every 0.45, the bed of the lake and the land beyond were joined by long steep slivers that stood out around every lake.
+LP = []
 for ring, lvl, holes in lake_polys:
-    pts.append(resample(ring, 0.45));
-    for h in holes: pts.append(resample(h, 0.45))
+    for rg in [ring] + holes:
+        e = resample(rg, .09)
+        if len(e) < 4: continue
+        tg = np.roll(e, -1, axis=0) - np.roll(e, 1, axis=0); nr = np.c_[-tg[:, 1], tg[:, 0]]; nr /= np.linalg.norm(nr, axis=1, keepdims=True) + 1e-12
+        probe = e + nr * .02; wet = inside(probe[:, 0], probe[:, 1], ring[:, 0], ring[:, 1])
+        for h in holes: wet &= ~inside(probe[:, 0], probe[:, 1], h[:, 0], h[:, 1])
+        nr[wet] *= -1                                   # every normal points out of the water
+        LP += [e, e + nr * .035, (e + nr * .13)[::2], (e - nr * .05)[::2]]
+LP = np.vstack(LP) if LP else np.zeros((0, 2))
+_, keep = np.unique(np.round(LP / .03).astype(int), axis=0, return_index=True); LP = LP[np.sort(keep)]
+if len(RP): LP = LP[cKDTree(RP).query(LP)[0] > .02]   # the river channels win where a river meets a lake
 for mk in LM["marks"]:
     if mk["kind"] != "quarry": continue
     for i, a in enumerate(pts): pts[i] = a[~inside(a[:, 0], a[:, 1], mk["xz"][:, 0], mk["xz"][:, 1]) & (cKDTree(mk["rim"]).query(a)[0] > .03)]
     ok = ~inside(RP[:, 0], RP[:, 1], mk["xz"][:, 0], mk["xz"][:, 1]) & (cKDTree(mk["rim"]).query(RP)[0] > .03); RP, RK, RW = RP[ok], RK[ok], RW[ok]
+    if len(LP): LP = LP[~inside(LP[:, 0], LP[:, 1], mk["xz"][:, 0], mk["xz"][:, 1]) & (cKDTree(mk["rim"]).query(LP)[0] > .03)]
 P = np.vstack(pts)
-# drop exact duplicates / near-duplicates (not the channel points, see above), and anything sitting right on a channel point
+# drop exact duplicates / near-duplicates (not the channel or shore points, see above), and anything sitting right on one of those
 _, keep = np.unique(np.round(P / 0.12).astype(int), axis=0, return_index=True); P = P[np.sort(keep)]
 P = P[cKDTree(RP).query(P)[0] > .006]
+if len(LP): P = np.vstack([P[cKDTree(LP).query(P)[0] > .03], LP])
 KIND = np.r_[np.zeros(len(P), int), RK]; WL = np.r_[np.zeros(len(P)), RW]; P = np.vstack([P, RP])
 QRIM = [mk["rim"] for mk in LM["marks"] if mk["kind"] == "quarry"]   # the quarry rim exactly: the template cuts the terrain there and fits the pit in
 if QRIM: P = np.vstack([P] + QRIM); n_ = sum(len(q) for q in QRIM); KIND = np.r_[KIND, np.zeros(n_, int)]; WL = np.r_[WL, np.zeros(n_)]
@@ -236,7 +251,7 @@ for ring, lvl, holes in lake_polys:
     ins = inside(P[:, 0], P[:, 1], ring[:, 0], ring[:, 1])
     for h in holes: ins &= ~inside(P[:, 0], P[:, 1], h[:, 0], h[:, 1])
     y[ins] = lvl - 0.3
-    sd = cKDTree(ring).query(P)[0]; shore = (~ins) & (sd < 0.05); y[shore] = np.maximum(lvl + 0.06, np.minimum(y[shore], lvl + 0.25))
+    sd = cKDTree(np.vstack([resample(rg, .01) for rg in [ring] + holes])).query(P)[0]; shore = (~ins) & (sd < 0.05);   # distance to the shore line, not just its vertices y[shore] = np.maximum(lvl + 0.06, np.minimum(y[shore], lvl + 0.25))
 # last word: under a river's ribbon the ground is always below its water, even where a lake bowl or shore lifted it
 y = np.where(d < hw * 0.6, np.minimum(y, wl - 0.22), y)
 y = np.where(d < E, np.minimum(y, wl - 0.03), y)

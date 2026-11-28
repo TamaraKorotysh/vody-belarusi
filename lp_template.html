@@ -227,8 +227,9 @@ function faceted(o={}){
   const uniforms=Object.assign({uTime:clock},o.uniforms||{});
   const patch=(sh,colour)=>{Object.assign(sh.uniforms,uniforms);
     sh.vertexShader=sh.vertexShader.replace("#include <common>","#include <common>\nuniform float uTime;attribute vec3 aCen;\n"+(o.head||"")).replace("#include <begin_vertex>","#include <begin_vertex>\n"+(o.body||""));
-    if(colour&&o.tint)sh.vertexShader=sh.vertexShader.replace("#include <color_vertex>","#include <color_vertex>\n"+o.tint)};
-  const id=JSON.stringify([o.head,o.body,o.tint,o.glow]);
+    if(colour&&o.tint)sh.vertexShader=sh.vertexShader.replace("#include <color_vertex>","#include <color_vertex>\n"+o.tint);
+    if(colour&&o.frag)sh.fragmentShader=sh.fragmentShader.replace("#include <common>","#include <common>\n"+o.frag[0]).replace("#include <clipping_planes_fragment>","#include <clipping_planes_fragment>\n"+o.frag[1])};
+  const id=JSON.stringify([o.head,o.body,o.tint,o.glow,o.frag]);
   m.onBeforeCompile=sh=>{patch(sh,true);if(o.glow)sh.fragmentShader=sh.fragmentShader.replace("#include <emissivemap_fragment>","#include <emissivemap_fragment>\ntotalEmissiveRadiance+=diffuseColor.rgb*"+o.glow.toFixed(3)+";")};
   m.customProgramCacheKey=()=>"facet"+id;
   if(o.body){m.depth=new THREE.MeshDepthMaterial({side:m.side});m.depth.onBeforeCompile=sh=>patch(sh,false);m.depth.customProgramCacheKey=()=>"fd"+id}
@@ -360,9 +361,20 @@ function channelGround(channel,original,reach){
 }
 
 const P=L.pts,M=L.m;
+// The hand-shaped Horyn, Vetlitsa and Lva end inside the Pripyat (and other rivers cross their boxes): their banks must not rise
+// across another river's water. Under any other ribbon a point keeps prep_lp.py's height, which already lies below that water.
+const otherRibbons=[];
+for(const [,r] of Object.entries(L.rivers)){if(r===horyn||r===vetlitsa||r===lva)continue;
+  for(const line of r.lines){const rows=riverRows(r,line);
+    for(let i=1;i<rows.length;i++){const a=rows[i-1],b=rows[i];
+      if(Math.max(a[0],b[0])<-12.5||Math.min(a[0],b[0])>-5.5||Math.max(a[1],b[1])<24||Math.min(a[1],b[1])>33)continue;
+      otherRibbons.push([a,b,riverHalfWidth(r,a)+.03,riverHalfWidth(r,b)+.03])}}}
+const underOther=(x,z)=>{for(const [a,b,ha,hb] of otherRibbons){const dx=b[0]-a[0],dz=b[1]-a[1],l=dx*dx+dz*dz||1,t=Math.max(0,Math.min(1,((x-a[0])*dx+(z-a[1])*dz)/l));
+  if(Math.hypot(x-a[0]-dx*t,z-a[1]-dz*t)<ha+(hb-ha)*t)return true}return false};
 for(let i=0;i<P.length;i+=3){
   const x=P[i],z=P[i+2];
   let y=P[i+1];
+  if(x>-12&&x< -6&&z>24.5&&z<32.6&&underOther(x,z))continue;
   if(x>-11.95&&x< -6.42&&z>24.55&&z<30.13){
     const channel=nearestSegment(lowerHorynSegments,x,z);
     y=channelGround(channel,y,lowerHoryn(channel.chainage));
@@ -382,7 +394,7 @@ for(const step of [.062,.117]){
     const x=-8.81+(col+(hash(col,row,step)-.5)*.84)*step;
     const z=25.28+(row+(hash(row,col,step*2)-.5)*.84)*step;
     const influence=townInfluence(x,z);
-    if(influence<.10)continue;
+    if(influence<.10||underOther(x,z))continue;
     const channel=nearestSegment(townSegments,x,z);
     const shore=Math.max(0,channel.distance-channel.halfWidth);
     const landmark=Math.hypot(x+7.67,z-26.34)*.77;
@@ -417,6 +429,7 @@ for(const [segments,spacing] of [[lowerHorynSegments,.074],[oldHorynSegments,.07
       if(reach<.30)continue;
       for(const side of [0,-1.45,1.45]){
         const offset=side*halfWidth,x=cx-dz/span*offset,z=cz+dx/span*offset;
+        if(underOther(x,z))continue;   // a mouth inside the Pripyat: no bank of this river across its water
         const influence=segments===lowerHorynSegments||segments===oldHorynSegments?townInfluence(x,z):0;
         const channel=nearestSegment(influence?townSegments:segments,x,z);
         const y=influence?townGround(x,z,.563+DH,influence,channel):channelGround(channel,level+.045,reach);
@@ -634,6 +647,16 @@ function mouthFit(line,end){
   return {outside,extending,cap};
 }
 let mouthCursor=0;
+// The lakes' water drawn into a mask, the same triangles as the lake meshes below: a river's ribbon is not drawn over a lake,
+// so where a river runs into a lake or through it, its water ends exactly along the shore instead of at a straight cut.
+const lakeClip=(()=>{let x0=1e9,x1=-1e9,z0=1e9,z1=-1e9;for(const [x,z] of L.border){x0=Math.min(x0,x);x1=Math.max(x1,x);z0=Math.min(z0,z);z1=Math.max(z1,z)}
+  x0-=1;z0-=1;x1+=1;z1+=1;const W=4096,H=Math.round(W*(z1-z0)/(x1-x0)),sx=W/(x1-x0),sz=H/(z1-z0);
+  const cv=document.createElement("canvas");cv.width=W;cv.height=H;const c=cv.getContext("2d");c.fillStyle="#fff";c.strokeStyle="#fff";c.lineWidth=.6;
+  for(const lk of Object.values(L.lakes)){const Q=lk.pts,T=lk.tri;c.beginPath();
+    for(let k=0;k<T.length;k+=3){for(let v=0;v<3;v++){const i=T[k+v]*2,X=(Q[i]-x0)*sx,Y=(Q[i+1]-z0)*sz;v?c.lineTo(X,Y):c.moveTo(X,Y)}c.closePath()}
+    c.fill();c.stroke()}   // the hairline stroke closes the seams between a lake's own triangles
+  const tex=new THREE.CanvasTexture(cv);tex.flipY=false;tex.generateMipmaps=false;tex.minFilter=tex.magFilter=THREE.LinearFilter;
+  return {uLake:{value:tex},uLakeBox:{value:new THREE.Vector4(x0,z0,1/(x1-x0),1/(z1-z0))}}})();
 for(const [name,r] of Object.entries(L.rivers)){
   const tris=[],exTri=[],oldChannelFaces=[],minor=!!(CARDS[name]&&CARDS[name].minor),auto=!!(CARDS[name]&&CARDS[name].auto);
   const gate=auto?GATE.auto:minor?GATE.minor:0;   // camera distance at which this river starts to fill
@@ -678,7 +701,9 @@ for(const [name,r] of Object.entries(L.rivers)){
     const oldChannel=oldChannelFaces[i]&&townInfluence(c.x,c.z)>.35;
     return tone(oldChannel?"#3793a0":PAL.river,c.x*5.3+c.z*9.1,oldChannel?.73:1.3);
   },(m,n,ti)=>exTri[ti]);
-  const mat=faceted({roughness:.32,uniforms:Object.assign({uWidth:gate?riverZoom:mainWidth},uni),head:"attribute vec4 aEx;attribute vec2 aOff;uniform float uT0,uSpeed,uSel,uWidth;\n",body:waterBody(r===horyn?".007":r===vetlitsa||r===lva?".003":undefined),tint:waterTint});
+  const mat=faceted({roughness:.32,uniforms:Object.assign({uWidth:gate?riverZoom:mainWidth},uni,lakeClip),head:"attribute vec4 aEx;attribute vec2 aOff;uniform float uT0,uSpeed,uSel,uWidth;varying vec2 vLk;\n",
+    body:waterBody(r===horyn?".007":r===vetlitsa||r===lva?".003":undefined)+"vLk=transformed.xz;",tint:waterTint,
+    frag:["varying vec2 vLk;uniform sampler2D uLake;uniform vec4 uLakeBox;","if(texture2D(uLake,(vLk-uLakeBox.xy)*uLakeBox.zw).r>.5)discard;   // over a lake: the lake's water takes over"]});
   if(!gate){mat.polygonOffset=true;mat.polygonOffsetFactor=-1;mat.polygonOffsetUnits=-2}   // a widened main river stays on top of its banks
   const m=meshOf(fg,mat,{cast:false});m.userData.name=name;scene.add(m);clickables.push(m);
   const main=r.lines.reduce((a,b)=>a.length>b.length?a:b);const mid=main[Math.floor(main.length*.5)];
