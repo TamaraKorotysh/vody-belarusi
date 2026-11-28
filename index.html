@@ -1454,6 +1454,160 @@ const townScale=(kind,r,minsk)=>kind==="tower"?.6+rnd()*(minsk?.9:.5):r===4?.85+
 // lowest ground under a building's footprint, so on a slope no corner hangs in the air
 const groundUnder=(x,z,rad)=>{let y=heightAt(x,z);if(y==null)return null;const d=rad*.7;for(const [a,b] of [[d,d],[-d,d],[d,-d],[-d,-d]]){const h=heightAt(x+a,z+b);if(h!=null)y=Math.min(y,h)}return y-.004};
 const nearCity=(x,z)=>Math.hypot(x-davyd.x,z-davyd.z)<.39||L.cities.some(([n,cx,cz,r])=>Math.hypot(x-cx,z-cz)<(n==="Минск"?2.6:r===1?1.9:r===4?.8:1.3));
+// ---------------------------------------------------------------- sights: ten landmarks, symbol-sized like the houses (true size would vanish at 1 unit = 6.95 km)
+const LL=(lon,lat)=>[(lon-28)*Math.cos(53.7*Math.PI/180)*16,(53.7-lat)*16];   // the same projection as proj() in scripts/prep_lp.py
+const SIGHTS=[],steam=[],lockWater=[],sightMat=faceted(),sightBoth=faceted({side:THREE.DoubleSide}),sightWater=faceted({glow:.12,roughness:.35}),steamMat=faceted({glow:.22});
+let sozhBridge=null;
+const nearSight=(x,z,pad=0)=>SIGHTS.some(s=>Math.hypot(x-s.x,z-s.z)<s.r+pad);
+const paintSight=col=>c=>tone(col,c.x*91.7+c.z*53.3+c.y*17.1,.6);
+// step away from a river or lake along (dx,dz) until a footprint of radius rad stands on dry land
+function bankSpot(x,z,rad,dx,dz){const l=Math.hypot(dx,dz);dx/=l;dz/=l;
+  const wet=(x,z)=>{const rv=riverNear(x,z);return rv.d<rv.hw+rad+.04||inLake(x,z)||inLake(x+dx*rad,z+dz*rad)||inLake(x-dz*rad,z+dx*rad)||inLake(x+dz*rad,z-dx*rad)};
+  for(let i=0;i<120&&wet(x,z);i++){x+=dx*.02;z+=dz*.02}return [x,z]}
+function groundSpan(x,z,r){let lo=1e9,hi=-1e9;for(let k=0;k<=16;k++){const a=k*Math.PI/8,d=k===16?0:k%2?r:r*.55,h=heightAt(x+Math.cos(a)*d,z+Math.sin(a)*d);if(h!=null){lo=Math.min(lo,h);hi=Math.max(hi,h)}}return [lo,hi]}
+// add one faceted part to a group; geometry is moved in place
+function piece(g,geo,col,x=0,y=0,z=0,o={}){if(o.rx)geo.rotateX(o.rx);if(o.rz)geo.rotateZ(o.rz);if(o.ry)geo.rotateY(o.ry);if(o.s)geo.scale(...o.s);geo.translate(x,y,z);
+  const m=meshOf(facet(geo,o.paint||paintSight(col)),o.mat||sightMat,{cast:o.cast});g.add(m);return m}
+// a triangular prism lying along x: base on y=0, ridge at height h, width w
+function gable(len,w,h){const g=new THREE.CylinderGeometry(1,1,len,3);g.rotateZ(Math.PI/2);g.rotateX(-Math.PI/2);g.scale(1,h/1.5,w/1.732);g.translate(0,h/3,0);return g}
+const dome=r=>new THREE.SphereGeometry(r,8,4,0,Math.PI*2,0,Math.PI/2);
+const flatDisc=(r,seg=12)=>new THREE.CircleGeometry(r,seg).rotateX(-Math.PI/2);
+// a sight (drawn k times its local size) stands on a low grassy plinth that levels the ground; it keeps houses, trees and rocks off its footprint
+function sight(x,z,r,ru,be,ry=0,k=1){const R=r*k,[lo,hi]=groundSpan(x,z,R),h=(hi-lo)/k+.07,g=new THREE.Group();g.position.set(x,hi+.006,z);g.rotation.y=ry;g.scale.setScalar(k);scene.add(g);
+  const pad=new THREE.CylinderGeometry(r,r*1.06,h,12);pad.translate(0,-h/2,0);piece(g,pad,PAL.meadow,0,0,0,{cast:false});
+  for(let a=-R;a<=R;a+=.09)for(let b=-R;b<=R;b+=.09)if(Math.hypot(a,b)<=R)claim(x+a,z+b,.07);
+  const s={x,z,r:R,k,ru,be,g,top:.3};SIGHTS.push(s);return s}
+// a convex solid from its face normals: each face gathers the vertices that lie furthest along its normal
+function hullByNormals(V,N){const pos=[];for(const n0 of N){const n=new THREE.Vector3(...n0).normalize();let mx=-1e9;for(const v of V)mx=Math.max(mx,v.dot(n));
+    const f=V.filter(v=>v.dot(n)>mx-1e-6),c=f.reduce((a,v)=>a.add(v),new THREE.Vector3()).divideScalar(f.length),u=f[0].clone().sub(c).normalize(),w=new THREE.Vector3().crossVectors(n,u);
+    f.sort((a,b)=>{const pa=a.clone().sub(c),pb=b.clone().sub(c);return Math.atan2(pa.dot(w),pa.dot(u))-Math.atan2(pb.dot(w),pb.dot(u))});
+    for(let i=1;i<f.length-1;i++)for(const v of [f[0],f[i],f[i+1]])pos.push(v.x,v.y,v.z)}
+  const g=new THREE.BufferGeometry();g.setAttribute("position",new THREE.Float32BufferAttribute(pos,3));return g}
+function nearestOn(name,x,z){const r=L.rivers[name];let best=1e9,at=null;if(!r)return null;
+  for(const l of r.lines)for(let i=1;i<l.length-1;i++){const d=Math.hypot(l[i][0]-x,l[i][1]-z);if(d<best){best=d;at={r,l,i}}}return at}
+const tangentAt=(l,i)=>{const a=l[Math.max(0,i-2)],b=l[Math.min(l.length-1,i+2)],d=Math.hypot(b[0]-a[0],b[1]-a[1]);return [(b[0]-a[0])/d,(b[1]-a[1])/d]};
+{
+  const brick="#ad503b",white="#f1ede4",copper="#5f8d7c",stone="#a19b90";
+  // 1. Minsk: the National Library, a rhombicuboctahedron of dark glass on a stylobate
+  {const [x,z]=LL(27.6463,53.9312),s=sight(x,z,.3,"Национальная библиотека","Нацыянальная бібліятэка",.35),g=s.g;
+    piece(g,new THREE.BoxGeometry(.4,.045,.4),"#d8d2c6",0,.0225,0);
+    piece(g,new THREE.BoxGeometry(.3,.035,.3),"#9fb3bf",0,.0625,0);
+    const q=1+Math.SQRT2,V=[],N=[];
+    for(const p of [[1,1,q],[1,q,1],[q,1,1]])for(const a of [-1,1])for(const b of [-1,1])for(const c of [-1,1])V.push(new THREE.Vector3(p[0]*a,p[1]*b,p[2]*c));
+    for(let ax=0;ax<3;ax++)for(const sg of [-1,1]){const n=[0,0,0];n[ax]=sg;N.push(n)}
+    for(let ax=0;ax<3;ax++)for(const a of [-1,1])for(const b of [-1,1]){const m=[0,0,0];m[(ax+1)%3]=a;m[(ax+2)%3]=b;N.push(m)}
+    for(const a of [-1,1])for(const b of [-1,1])for(const c of [-1,1])N.push([a,b,c]);
+    const k=.064,gem=hullByNormals(V,N);gem.scale(k,k,k);gem.translate(0,.08+q*k,0);
+    piece(g,gem,"#3d6c8a",0,0,0,{paint:(c,n)=>tone(Math.abs(n.x)+Math.abs(n.y)+Math.abs(n.z)>1.6?"#2f5873":Math.abs(n.y)>.9?"#6f9bb5":"#3f7393",c.x*71+c.z*37+c.y*13,.8)});
+    s.top=.08+2*q*k}
+  // 2. Brest Fortress: the ring of red barracks inside a moat and an earthen rampart, the bayonet obelisk and the stone head "Courage"
+  {let [x,z]=LL(23.6560,52.0830);[x,z]=bankSpot(x,z,.3,0,-1);const s=sight(x,z,.31,"Брестская крепость","Брэсцкая крэпасць",.2),g=s.g;
+    const ring=(r0,r1,h,col,mat)=>{const pts=[new THREE.Vector2(r0,-.005),new THREE.Vector2(r0+.008,h),new THREE.Vector2(r1-.008,h),new THREE.Vector2(r1,-.005)];piece(g,new THREE.LatheGeometry(pts,14),col,0,0,0,{mat})};
+    ring(.25,.305,.035,"#7e9a55",sightBoth);                                            // rampart
+    piece(g,new THREE.RingGeometry(.17,.25,14).rotateX(-Math.PI/2),PAL.lake,0,.004,0,{mat:sightWater,cast:false});   // moat
+    ring(.105,.165,.038,brick,sightBoth);                                               // ring of barracks
+    piece(g,flatDisc(.105),"#c4bcae",0,.002,0,{cast:false});
+    piece(g,new THREE.BoxGeometry(.05,.055,.03),"#9c4734",0,.0275,.165);               // the Kholm gate
+    for(const sx of [-1,1])piece(g,new THREE.CylinderGeometry(.009,.009,.075,6),"#9c4734",sx*.024,.0375,.17);
+    piece(g,new THREE.BoxGeometry(.016,.008,.09),"#b9ab94",0,.006,.21);                 // bridge over the moat
+    piece(g,new THREE.CylinderGeometry(.002,.03,.56,3),"#cfd3d7",-.035,.28,-.02);      // bayonet obelisk
+    piece(g,new THREE.BoxGeometry(.075,.11,.05),"#8d8981",.045,.055,.03);              // the head
+    piece(g,new THREE.BoxGeometry(.078,.014,.014),"#7a766f",.045,.08,.058);
+    piece(g,new THREE.ConeGeometry(.01,.03,4),"#7a766f",.045,.06,.06,{rx:Math.PI/2+.4});
+    s.top=.56}
+  // 3. Mir Castle: red brick towers with white bands and tented roofs, the palace inside, the pond in front
+  {let [x,z]=LL(26.4729,53.4513);[x,z]=bankSpot(x,z,.46,1,-.3);const s=sight(x,z,.3,"Мирский замок","Мірскі замак",.15,1.6),g=s.g,h=.09;
+    piece(g,flatDisc(.1,10),PAL.lake,-.13,.004,.17,{mat:sightWater,cast:false,s:[1.4,1,.75]});
+    for(const [px,pz,len,ry] of [[0,-h,2*h,0],[0,h,2*h,0],[-h,0,2*h,Math.PI/2],[h,0,2*h,Math.PI/2]])piece(g,new THREE.BoxGeometry(len,.055,.014),brick,px,.0275,pz,{ry});
+    const tower=(px,pz,th)=>{piece(g,new THREE.BoxGeometry(.046,th,.046),brick,px,th/2,pz);
+      for(const y of [th*.38,th*.72])piece(g,new THREE.BoxGeometry(.05,.008,.05),white,px,y,pz);
+      piece(g,new THREE.ConeGeometry(.037,.055,4),"#7a3a2b",px,th+.0275,pz,{ry:Math.PI/4})};
+    for(const [px,pz] of [[-h,-h],[h,-h],[-h,h],[h,h]])tower(px,pz,.11);
+    tower(-h,0,.135);                                                                   // the gate tower
+    piece(g,new THREE.BoxGeometry(.15,.07,.04),"#eee7da",.005,.035,-.06);
+    piece(g,gable(.15,.044,.03),"#8a4a35",.005,.07,-.06);
+    s.top=.19}
+  // 4. Nesvizh: the palace on its island, the moat, the dam to the gate and the ponds around
+  {let [x,z]=LL(26.6917,53.2228);x+=.1;[x,z]=bankSpot(x,z,.5,1,0);const s=sight(x,z,.34,"Несвижский замок","Нясвіжскі замак",-.1,1.5),g=s.g;
+    piece(g,new THREE.RingGeometry(.125,.19,4,1).rotateZ(Math.PI/4).rotateX(-Math.PI/2),PAL.lake,0,.004,0,{mat:sightWater,cast:false});
+    piece(g,flatDisc(.09,10),PAL.lake,-.22,.004,-.13,{mat:sightWater,cast:false,s:[1,1,1.5]});
+    piece(g,flatDisc(.08,10),PAL.lake,.19,.004,-.2,{mat:sightWater,cast:false,s:[1.5,1,.8]});
+    const cream="#ecdfbd",roof="#6e3b2e";
+    piece(g,new THREE.BoxGeometry(.16,.06,.036),cream,0,.03,-.06);piece(g,gable(.16,.04,.03),roof,0,.06,-.06);
+    for(const sx of [-1,1]){piece(g,new THREE.BoxGeometry(.036,.055,.12),cream,sx*.062,.0275,0);piece(g,gable(.12,.04,.028),roof,sx*.062,.055,0,{ry:Math.PI/2})}
+    piece(g,new THREE.BoxGeometry(.09,.04,.026),cream,0,.02,.067);
+    piece(g,new THREE.BoxGeometry(.034,.11,.034),cream,0,.055,.067);
+    piece(g,new THREE.ConeGeometry(.024,.08,8),copper,0,.15,.067);
+    piece(g,new THREE.BoxGeometry(.028,.01,.1),"#b49a72",0,.004,.15);                   // the dam
+    s.top=.19}
+  // 5. Polotsk: the white St Sophia Cathedral with its two towers above the Western Dvina
+  {let [x,z]=LL(28.7565,55.4862);[x,z]=bankSpot(x,z,.25,-.4,-1);const s=sight(x,z,.16,"Софийский собор","Сафійскі сабор",.25,1.6),g=s.g;
+    piece(g,new THREE.BoxGeometry(.15,.075,.095),white,0,.0375,0);
+    piece(g,gable(.15,.1,.034),"#7d8a86",0,.075,0);
+    piece(g,new THREE.CylinderGeometry(.038,.038,.07,8,1,false,0,Math.PI),white,.075,.035,0);
+    for(const sz of [-1,1]){piece(g,new THREE.CylinderGeometry(.021,.023,.17,8),white,-.07,.085,sz*.04);
+      piece(g,new THREE.CylinderGeometry(.015,.017,.05,8),white,-.07,.195,sz*.04);
+      piece(g,dome(.016),"#6d8f7e",-.07,.22,sz*.04);
+      piece(g,new THREE.CylinderGeometry(.002,.002,.03,4),"#c9a24a",-.07,.25,sz*.04)}
+    piece(g,new THREE.CylinderGeometry(.018,.018,.03,8),white,.02,.11,0);piece(g,dome(.018),"#6d8f7e",.02,.125,0);
+    s.top=.27}
+  // 6. Gomel: the Rumyantsev-Paskevich Palace on the high bank of the Sozh, and the cable-stayed footbridge across the river
+  {const [x0,z0]=LL(31.0145,52.4220),[x,z]=bankSpot(x0,z0,.28,-1,0),s=sight(x,z,.21,"Дворец Румянцевых-Паскевичей","Палац Румянцавых і Паскевічаў",Math.PI/2,1.35),g=s.g,cream="#efe5cf";
+    piece(g,new THREE.BoxGeometry(.26,.065,.07),cream,0,.0325,0);
+    piece(g,gable(.26,.074,.03),copper,0,.065,0);
+    for(let i=0;i<6;i++)piece(g,new THREE.CylinderGeometry(.005,.005,.058,5),white,-.045+i*.018,.029,.045);
+    piece(g,new THREE.BoxGeometry(.11,.008,.026),cream,0,.062,.045);piece(g,gable(.11,.026,.02),cream,0,.066,.045,{ry:0});
+    piece(g,new THREE.CylinderGeometry(.03,.03,.03,10),cream,0,.08,0);piece(g,dome(.03),copper,0,.095,0);
+    piece(g,new THREE.BoxGeometry(.046,.17,.046),cream,.15,.085,0);piece(g,new THREE.ConeGeometry(.035,.045,4),copper,.15,.1925,0,{ry:Math.PI/4});
+    s.top=.24;
+    const at=nearestOn("Сож",x0,z0);
+    if(at){let i=at.i,walked=0;while(i<at.l.length-3&&walked<.3){walked+=Math.hypot(at.l[i+1][0]-at.l[i][0],at.l[i+1][1]-at.l[i][1]);i++}
+      const p=at.l[i],[tx,tz]=tangentAt(at.l,i),hw=drawnHalf(at.r,p),span=hw+.07,b=new THREE.Group();
+      b.position.set(p[0],p[3],p[1]);b.rotation.y=Math.atan2(-tx,-tz);   // local x runs across the river
+      const deckY=.05,mast=.15;
+      piece(b,new THREE.BoxGeometry(2*span,.006,.024),"#d9d5cc",0,deckY,0);
+      for(const sx of [-1,1]){piece(b,new THREE.BoxGeometry(.01,mast+.06,.01),"#f2efe8",sx*(hw+.015),deckY+mast/2-.03,0);
+        const ground=heightAt(p[0]+sx*span*-tz,p[1]+sx*span*tx);if(ground!=null)piece(b,new THREE.BoxGeometry(.04,Math.max(.01,deckY+p[3]-ground+.01),.03),"#b9b3a7",sx*span,(ground-p[3]+deckY)/2,0)}
+      const cab=[];for(const sx of [-1,1])for(let k=1;k<=4;k++){const ox=sx*(hw+.015);cab.push(ox,deckY+mast,0,ox-sx*k*hw/4.5,deckY,0,ox,deckY+mast,0,ox+sx*k*.016,deckY,0)}
+      const lg=new THREE.BufferGeometry();lg.setAttribute("position",new THREE.Float32BufferAttribute(cab,3));b.add(new THREE.LineSegments(lg,new THREE.LineBasicMaterial({color:"#f7f4ee"})));
+      scene.add(b);sozhBridge=b}}
+  // 7. Grodno: the Kalozha church of grey stone above the Neman, its fallen river wall made good in timber
+  {let [x,z]=LL(23.8100,53.6772);[x,z]=bankSpot(x,z,.22,0,-1);const s=sight(x,z,.12,"Коложская церковь","Каложа",0,1.8),g=s.g;
+    piece(g,new THREE.BoxGeometry(.13,.08,.095),stone,0,.04,0);
+    piece(g,new THREE.BoxGeometry(.06,.08,.004),"#6f5236",.035,.04,.0495);
+    piece(g,gable(.13,.1,.035),"#6d6a64",0,.08,0);
+    piece(g,new THREE.CylinderGeometry(.022,.022,.03,8),stone,-.02,.11,0);piece(g,dome(.022),"#7d8f86",-.02,.125,0);
+    s.top=.15}
+  // 8. The Kamyenyets Tower: a red brick cylinder with white blind niches and a crown of merlons
+  {let [x,z]=LL(23.8185,52.4005);[x,z]=bankSpot(x,z,.11,1,0);const s=sight(x,z,.08,"Каменецкая вежа","Камянецкая вежа",0,1.35),g=s.g;
+    piece(g,new THREE.CylinderGeometry(.045,.047,.3,12),"#a84a37",0,.15,0);
+    for(let k=0;k<3;k++){const a=k*2.1+.4;piece(g,new THREE.BoxGeometry(.012,.13,.004),"#efe6d6",Math.sin(a)*.046,.17,Math.cos(a)*.046,{ry:a})}
+    for(let k=0;k<12;k++){const a=k*Math.PI/6;piece(g,new THREE.BoxGeometry(.016,.02,.012),"#a84a37",Math.sin(a)*.04,.31,Math.cos(a)*.04,{ry:a})}
+    piece(g,new THREE.ConeGeometry(.036,.045,12),"#5a4a3e",0,.3225,0);
+    s.top=.35}
+  // 9. Locks on the Dnieper-Bug Canal: a chamber between two walls, gates at both ends, water that rises and falls, the keeper's house
+  {const r=L.rivers["Днепровско-Бугский канал"];
+    if(r){const l=r.lines.reduce((a,b)=>b.length>a.length?b:a);[.3,.62].forEach((f,n)=>{const i=Math.floor(l.length*f),p=l[i],[tx,tz]=tangentAt(l,i),hw=drawnHalf(r,p),g=new THREE.Group();
+      g.position.set(p[0],p[3],p[1]);g.rotation.y=-Math.atan2(tz,tx);scene.add(g);                // local x runs along the canal
+      for(const sz of [-1,1])piece(g,new THREE.BoxGeometry(.25,.13,.02),"#bdb6aa",0,.01,sz*(hw+.01));
+      for(const sx of [-1,1])piece(g,new THREE.BoxGeometry(.014,.07,2*hw),"#4f3b2b",sx*.11,.025,0);
+      const w=piece(g,new THREE.PlaneGeometry(.21,2*hw).rotateX(-Math.PI/2),PAL.lake,0,0,0,{mat:sightWater,cast:false});lockWater.push(w);
+      const wx=p[0]-tz*(hw+.075),wz=p[1]+tx*(hw+.075),hy=Math.max(.05,(groundUnder(wx,wz,.04)??p[3])-p[3]);claim(wx,wz,.06);
+      piece(g,new THREE.BoxGeometry(.06,.045+hy,.05),"#f0ebe0",0,(hy+.045)/2,hw+.075);piece(g,gable(.066,.058,.032),"#b5503c",0,hy+.045,hw+.075);
+      SIGHTS.push({x:p[0],z:p[1],r:.1,ru:n?null:"Шлюзы Днепровско-Бугского канала",be:n?null:"Шлюзы Дняпроўска-Бугскага канала",g,top:.06})})}}
+  // 10. The Belarusian nuclear power plant near Astravets: two cooling towers breathing steam, two reactor domes
+  {const [x,z]=LL(26.0895,54.7600),s=sight(x,z,.34,"Белорусская АЭС","Беларуская АЭС",.4),g=s.g;
+    const prof=[];for(let k=0;k<=8;k++){const y=k/8*.36;prof.push(new THREE.Vector2(.055*Math.sqrt(1+((y-.27)/.11)**2),y))}
+    for(const sx of [-1,1]){piece(g,new THREE.LatheGeometry(prof,14),"#e6e3dc",sx*.15,0,.07,{mat:sightBoth});
+      for(let k=0;k<3;k++){const m=meshOf(facet(jitter(new THREE.IcosahedronGeometry(.07,1),.01,k+3),()=>new THREE.Color(PAL.cloud)),steamMat,{cast:false});m.position.set(sx*.15,.4,.07);g.add(m);steam.push({m,k,sx})}}
+    for(const sx of [-1,1]){piece(g,new THREE.CylinderGeometry(.045,.045,.09,12),"#f1efe9",sx*.08,.045,-.15);piece(g,dome(.045),"#f1efe9",sx*.08,.09,-.15)}
+    piece(g,new THREE.BoxGeometry(.26,.06,.06),"#c9d3db",0,.03,-.24);
+    s.top=.4}
+}
+function updateSights(T){const t=reduce?0:T;
+  for(const s of steam){const f=((t*.12+s.k/3+(s.sx>0?.15:0))%1),k=(.5+1.6*f)*Math.sin(Math.PI*Math.min(1,f*1.15));s.m.position.y=.38+f*.32;s.m.position.x=s.sx*.15+f*.06;s.m.scale.setScalar(Math.max(.001,k))}
+  for(const w of lockWater)w.position.y=.004+.016*(.5+.5*Math.sin(t*.35));
+  if(sozhBridge)sozhBridge.visible=mainWidth.value<1.05}   // the main rivers widen and rise on the overview; the bridge shows only close up
 {
   const B=L.border;let x0=1e9,x1=-1e9,z0=1e9,z1=-1e9;for(const [x,z] of B){x0=Math.min(x0,x);x1=Math.max(x1,x);z0=Math.min(z0,z);z1=Math.max(z1,z)}
   const MAXT=mobile?5200:10000;let n=0;
@@ -1461,11 +1615,11 @@ const nearCity=(x,z)=>Math.hypot(x-davyd.x,z-davyd.z)<.39||L.cities.some(([n,cx,
     const x=x0+rnd()*(x1-x0),z=z0+rnd()*(z1-z0),fz=forestN(x,z);
     const dP=Math.hypot(x-PUSHCHA[0],z-PUSHCHA[1]);if(dP<1.6)continue;const inForest=fz>.53||dP<4.5;if(!inForest&&rnd()>.018)continue;
     if(inForest&&dP>=4.5&&rnd()>.3+.7*vn(x*.07+11,z*.07-5))continue;   // thinner patches and glades inside the forests
-    if(!inPoly(x,z,B))continue;const rv=riverNear(x,z);if(rv.d<rv.hw+.9)continue;if(nearCity(x,z)||inLake(x,z)||inMark(x,z,.06))continue;
+    if(!inPoly(x,z,B))continue;const rv=riverNear(x,z);if(rv.d<rv.hw+.9)continue;if(nearCity(x,z)||nearSight(x,z,.12)||inLake(x,z)||inMark(x,z,.06))continue;
     const y=heightAt(x,z);if(y==null)continue;
     const polesie=z>13;const kind=inForest?(polesie?(rnd()<.5?"tree":"pine2"):(rnd()<.62?(rnd()<.5?"pine":"pine2"):(rnd()<.2?"ochre":"tree"))):(rnd()<.3?"ochre":"tree");
     place[kind].push([x,y-.03,z,.32+rnd()*.22,rnd()*6.28,(rnd()-.5)*.1]);n++}
-  for(let t=0;t<3000;t++){const x=x0+rnd()*(x1-x0),z=z0+rnd()*(z1-z0);if(!inPoly(x,z,B))continue;const rv=riverNear(x,z);if(!(rv.d>rv.hw+.4&&rv.d<rv.hw+1.4)||rnd()>.08||inLake(x,z)||inMark(x,z,.06))continue;const y=heightAt(x,z);if(y==null)continue;place.rock.push([x,y-.006,z,.05+rnd()*.09,rnd()*6.28,0])}   // boulders a few hundred metres across, about a house's size, and a third as many as before
+  for(let t=0;t<3000;t++){const x=x0+rnd()*(x1-x0),z=z0+rnd()*(z1-z0);if(!inPoly(x,z,B))continue;const rv=riverNear(x,z);if(!(rv.d>rv.hw+.4&&rv.d<rv.hw+1.4)||rnd()>.08||inLake(x,z)||inMark(x,z,.06)||nearSight(x,z,.1))continue;const y=heightAt(x,z);if(y==null)continue;place.rock.push([x,y-.006,z,.05+rnd()*.09,rnd()*6.28,0])}   // boulders a few hundred metres across, about a house's size, and a third as many as before
   for(const [nm,cx,cz,r] of L.cities){const minsk=nm==="Минск",count=minsk?130:r===1?55:r===2?26:r===3?11:6,spread=minsk?2.4:r===1?1.7:r===2?1.15:r===3?.75:.5;
     for(let k=0,tries=0;k<count&&tries<count*60;tries++){   /* a river town may step just past its radius to find a dry bank, but not far enough to meet the next town */
       const grow=1+tries/(count*8),a=rnd()*6.283,rr=Math.sqrt(rnd())*spread*Math.min(grow,1.15),x=cx+Math.cos(a)*rr,z=cz+Math.sin(a)*rr;
@@ -1673,6 +1827,9 @@ for(const [n,x,z,r,be] of cityLabels){
   for(const g of groups){const x=g.x/g.n,z=g.z/g.n,el=document.createElement("div");el.className="city tiny mark notranslate";el.translate=false;
     el.textContent=g.kind==="quarry"?(LANG==="be"?"Гранітны кар'ер":"Гранитный карьер"):g.n>1?(LANG==="be"?"Солеадвалы":"Солеотвалы"):(LANG==="be"?"Солеадвал":"Солеотвал");
     labelsEl.appendChild(el);labels.push({el,r:3,n:el.textContent,pos:new THREE.Vector3(x,g.top+.35,z)})}}
+// sight labels: one for each landmark
+for(const s of SIGHTS){if(!s.ru)continue;const el=document.createElement("div");el.className="city tiny mark notranslate";el.translate=false;el.textContent=LANG==="be"?s.be:s.ru;
+  labelsEl.appendChild(el);labels.push({el,r:3,n:s.ru,be:s.be,pos:new THREE.Vector3(s.x,s.g.position.y+s.top*(s.k||1)+.12,s.z)})}
 let camD=150;
 const v3=new THREE.Vector3();
 function placeLabels(){const w=innerWidth,h=innerHeight;for(const l of labels){
@@ -1807,7 +1964,7 @@ function loop(now){
   updateStorks(T);
   if((++scaleTick)%8===0){_sa.copy(controls.target);_sr.setFromMatrixColumn(camera.matrixWorld,0);_sr.y=0;_sr.normalize();_sb.copy(_sa).add(_sr);
     _sa.project(camera);_sb.project(camera);const px=Math.hypot((_sb.x-_sa.x)*innerWidth/2,(_sb.y-_sa.y)*innerHeight/2)/6.95;
-    let km=1;for(const k of [1,2,5,10,20,50,100,200])if(k*px<=110)km=k;scaleBar.style.width=(km*px).toFixed(0)+"px";scaleLbl.textContent=km+" км"}updateHerd(T);
+    let km=1;for(const k of [1,2,5,10,20,50,100,200])if(k*px<=110)km=k;scaleBar.style.width=(km*px).toFixed(0)+"px";scaleLbl.textContent=km+" км"}updateHerd(T);updateSights(T);
   camD=camera.position.distanceTo(controls.target);
   const zoom=Math.min(1,Math.max(0,(130-camD)/110));
   riverWidth.value=.3+.7*zoom;   // lakes: unchanged, thin on the overview and full close up
